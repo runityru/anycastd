@@ -1,0 +1,24 @@
+---
+builds:
+  - id: anycastd
+    main: ./cmd/anycastd
+    binary: anycastd
+    ldflags:
+      - -s -w -X main.appVersion={{.Version}} -X main.buildTimestamp={{.Date}}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    goamd64: ["v1", "v2", "v3"]
+    goarm: ["7"]
+    mod_timestamp: "{{ .CommitTimestamp }}"
+archives:
+  - format: binary
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+  split: false
+  disable: false

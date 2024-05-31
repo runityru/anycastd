@@ -1,0 +1,88 @@
+---
+name: release
+
+on:
+  push:
+    tags:        
+      - 'v*'
+
+env:
+  IMAGE_NAME: anycastd
+
+jobs:
+  hadolint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+
+  markdownlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: articulate/actions-markdownlint@v1
+
+  unittests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+      - name: Install dependencies
+        run: go mod download
+      - name: Test with the Go CLI
+        run: go test ./...
+      - name: Build
+        run: go build -v ./...
+
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    needs:
+      - hadolint
+      - markdownlint
+      - unittests
+    steps:
+      - name: Define build timestamp
+        id: timestamp
+        run: echo "::set-output name=now::$(date -u +'%Y%m%d%H%M%S')"
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+      - name: Install dependencies
+        run: go mod download
+      - name: Build & Publish release release
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          distribution: goreleaser
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: amd64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/${{ env.IMAGE_NAME }}:v${{ github.ref_name }}
+            ghcr.io/${{ github.repository }}/${{ env.IMAGE_NAME }}:v${{ github.ref_name }}-${{ steps.timestamp.outputs.now }}
+          outputs: type=image,name=ghcr.io/${{ github.repository }}/${{ env.IMAGE_NAME }},annotation-index.org.opencontainers.image.description=${{ env.IMAGE_NAME }}

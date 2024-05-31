@@ -50,7 +50,9 @@ func NewFromFile(filename string) (*Config, error) {
 		return nil, errors.Wrap(err, "error reading configuration file")
 	}
 
-	switch strings.ToLower(filepath.Ext(filename)) {
+	ext := strings.ToLower(filepath.Ext(filename))
+
+	switch ext {
 	case ".yml", ".yaml":
 		type intermediate struct {
 			Services []any          `yaml:"services"`
@@ -68,6 +70,10 @@ func NewFromFile(filename string) (*Config, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "error marshaling intermediate configuration")
 		}
+	case ".json":
+		// no additional action needed
+	default:
+		return nil, errors.Errorf("unexpected file format: `%s`", ext)
 	}
 
 	if err := json.Unmarshal(data, &cfg); err != nil {

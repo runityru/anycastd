@@ -5,15 +5,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
 func TestConfig(t *testing.T) {
-	r := require.New(t)
+	type testCase struct {
+		name       string
+		samplePath string
+		expOut     Config
+		expError   error
+	}
 
-	cfg, err := NewFromFile("testdata/sample.yaml")
-	r.NoError(err)
-	r.Equal(&Config{
+	sampleConfig := Config{
 		Services: []Service{
 			{
 				Name:          "http",
@@ -57,5 +61,48 @@ func TestConfig(t *testing.T) {
 			Enabled: true,
 			Address: "127.0.0.1:9090",
 		},
-	}, cfg)
+	}
+
+	tcs := []testCase{
+		{
+			name:       "YAML configuration",
+			samplePath: "testdata/sample.yaml",
+			expOut:     sampleConfig,
+		},
+		{
+			name:       "JSON configuration",
+			samplePath: "testdata/sample.json",
+			expOut:     sampleConfig,
+		},
+		{
+			name:       "wrong config file extension",
+			samplePath: "testdata/sample.unknown",
+			expError:   errors.New("unexpected file format: `.unknown`"),
+		},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			r := require.New(t)
+
+			cfg, err := NewFromFile(tc.samplePath)
+			if tc.expError == nil {
+				r.NoError(err)
+				for i := range tc.expOut.Services {
+					r.Equalf(tc.expOut.Services[i].Name, cfg.Services[i].Name, "svc#%d", i)
+					r.Equalf(tc.expOut.Services[i].CheckInterval, cfg.Services[i].CheckInterval, "svc#%d", i)
+					r.Equalf(tc.expOut.Services[i].CheckOperator, cfg.Services[i].CheckOperator, "svc#%d", i)
+					for j := range tc.expOut.Services[i].Checks {
+						r.Equalf(tc.expOut.Services[i].Checks[j].Kind, cfg.Services[i].Checks[j].Kind, "svc#%d check#%d", i, j)
+						r.JSONEqf(string(tc.expOut.Services[i].Checks[j].Spec), string(cfg.Services[i].Checks[j].Spec), "svc#%d check#%d", i, j)
+					}
+					r.Equalf(tc.expOut.Services[i].Peers, cfg.Services[i].Peers, "svc#%d", i)
+				}
+				r.Equal(tc.expOut.Metrics, cfg.Metrics)
+			} else {
+				r.Error(err)
+				r.Equal(tc.expError.Error(), err.Error())
+			}
+		})
+	}
 }

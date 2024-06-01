@@ -10,18 +10,22 @@ import (
 	yaml "gopkg.in/yaml.v3"
 )
 
+type Announcer struct {
+	LocalAddress string   `json:"local_address"`
+	LocalAS      uint32   `json:"local_as"`
+	Routes       []string `json:"routes"`
+	Peers        []Peer   `json:"peers"`
+}
+
 type Check struct {
 	Kind string          `json:"kind"`
 	Spec json.RawMessage `json:"spec"`
 }
 
 type Peer struct {
-	Name          string   `json:"name"`
-	RemoteAddress string   `json:"remote_address"`
-	RemoteAS      uint64   `json:"remote_as"`
-	LocalAddress  string   `json:"local_address"`
-	LocalAS       uint64   `json:"local_as"`
-	Routes        []string `json:"routes"`
+	Name          string `json:"name"`
+	RemoteAddress string `json:"remote_address"`
+	RemoteAS      uint32 `json:"remote_as"`
 }
 
 type Service struct {
@@ -29,7 +33,6 @@ type Service struct {
 	CheckOperator string   `json:"check_operator"`
 	CheckInterval Duration `json:"check_interval"`
 	Checks        []Check  `json:"checks"`
-	Peers         []Peer   `json:"peers"`
 }
 
 type Metrics struct {
@@ -38,8 +41,9 @@ type Metrics struct {
 }
 
 type Config struct {
-	Services []Service `json:"services"`
-	Metrics  Metrics   `json:"metrics"`
+	Announcer Announcer `json:"announcer"`
+	Services  []Service `json:"services"`
+	Metrics   Metrics   `json:"metrics"`
 }
 
 func NewFromFile(filename string) (*Config, error) {
@@ -55,8 +59,9 @@ func NewFromFile(filename string) (*Config, error) {
 	switch ext {
 	case ".yml", ".yaml":
 		type intermediate struct {
-			Services []any          `yaml:"services"`
-			Metrics  map[string]any `yaml:"metrics"`
+			Announcer map[string]any `yaml:"announcer"`
+			Services  []any          `yaml:"services"`
+			Metrics   map[string]any `yaml:"metrics"`
 		}
 
 		d := intermediate{}

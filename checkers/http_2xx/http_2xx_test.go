@@ -16,8 +16,7 @@ func (s *http2xxTestSuite) TestTrivial() {
 	s.handlerMock.On("ServeHTTP", http.MethodGet, "/ping").Return(http.StatusOK).Once()
 
 	c, err := New(spec{
-		Address:  s.srv.URL,
-		Path:     "/ping",
+		URL:      s.srv.URL + "/ping",
 		Method:   "GET",
 		Tries:    1,
 		Interval: config.Duration(1 * time.Second),
@@ -33,8 +32,7 @@ func (s *http2xxTestSuite) TestFiveTries() {
 	s.handlerMock.On("ServeHTTP", http.MethodGet, "/ping").Return(http.StatusOK).Once()
 
 	c, err := New(spec{
-		Address:  s.srv.URL,
-		Path:     "/ping",
+		URL:      s.srv.URL + "/ping",
 		Method:   "GET",
 		Tries:    5,
 		Interval: config.Duration(1 * time.Second),
@@ -52,8 +50,7 @@ func (s *http2xxTestSuite) TestSuccessFromThirdTime() {
 	s.handlerMock.On("ServeHTTP", http.MethodGet, "/ping").Return(http.StatusOK).Once()
 
 	c, err := New(spec{
-		Address:  s.srv.URL,
-		Path:     "/ping",
+		URL:      s.srv.URL + "/ping",
 		Method:   "GET",
 		Tries:    3,
 		Interval: config.Duration(1 * time.Millisecond),
@@ -69,8 +66,7 @@ func (s *http2xxTestSuite) TestNegative() {
 	s.handlerMock.On("ServeHTTP", http.MethodGet, "/ping").Return(http.StatusServiceUnavailable).Twice()
 
 	c, err := New(spec{
-		Address:  s.srv.URL,
-		Path:     "/ping",
+		URL:      s.srv.URL + "/ping",
 		Method:   "GET",
 		Tries:    2,
 		Interval: config.Duration(1 * time.Millisecond),

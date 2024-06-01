@@ -20,8 +20,7 @@ func TestSpecValidation(t *testing.T) {
 		{
 			name: "valid spec",
 			in: spec{
-				Address:  "127.0.0.1:8080",
-				Path:     "/",
+				URL:      "http://127.0.0.1:8080/",
 				Method:   "GET",
 				Tries:    3,
 				Interval: config.Duration(1 * time.Second),
@@ -32,7 +31,7 @@ func TestSpecValidation(t *testing.T) {
 			name: "empty spec",
 			in:   spec{},
 			expError: errors.New(
-				"address: cannot be blank; interval: cannot be blank; method: cannot be blank; path: cannot be blank; timeout: cannot be blank; tries: cannot be blank.",
+				"interval: cannot be blank; method: cannot be blank; timeout: cannot be blank; tries: cannot be blank; url: cannot be blank.",
 			),
 		},
 	}

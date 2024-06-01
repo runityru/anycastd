@@ -13,11 +13,16 @@ import (
 
 var _ checkers.Checker = (*http_2xx)(nil)
 
+const checkName = "http_2xx"
+
+func init() {
+	checkers.Register(checkName, NewFromSpec)
+}
+
 type http_2xx struct {
 	client   *http.Client
-	address  string
+	url      string
 	method   string
-	path     string
 	tries    uint8
 	interval time.Duration
 }
@@ -33,9 +38,8 @@ func New(s spec) (checkers.Checker, error) {
 
 	return &http_2xx{
 		client:   client,
-		address:  s.Address,
+		url:      s.URL,
 		method:   s.Method,
-		path:     s.Path,
 		tries:    s.Tries,
 		interval: time.Duration(s.Interval),
 	}, nil
@@ -53,12 +57,21 @@ func NewFromSpec(in json.RawMessage) (checkers.Checker, error) {
 func (h *http_2xx) Check(ctx context.Context) error {
 	var lastErr error
 	for i := 0; i < int(h.tries); i++ {
+		log.WithFields(log.Fields{
+			"check":   checkName,
+			"attempt": i + 1,
+		}).Tracef("running check")
+
 		if err := h.check(ctx); err != nil {
 			lastErr = err
-			log.Infof("error received: %s", err)
+			log.WithFields(log.Fields{
+				"check":   checkName,
+				"attempt": i + 1,
+			}).Infof("error received: %s", err)
 		} else {
 			return nil
 		}
+
 		time.Sleep(h.interval)
 	}
 
@@ -72,7 +85,7 @@ func (h *http_2xx) Check(ctx context.Context) error {
 }
 
 func (h *http_2xx) check(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, h.method, h.address+h.path, nil)
+	req, err := http.NewRequestWithContext(ctx, h.method, h.url, nil)
 	if err != nil {
 		return err
 	}

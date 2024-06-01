@@ -18,6 +18,23 @@ func TestConfig(t *testing.T) {
 	}
 
 	sampleConfig := Config{
+		Announcer: Announcer{
+			LocalAddress: "10.0.0.1",
+			LocalAS:      65999,
+			Routes:       []string{"10.0.0.128/32"},
+			Peers: []Peer{
+				{
+					Name:          "some_router_1",
+					RemoteAddress: "10.0.0.252",
+					RemoteAS:      65000,
+				},
+				{
+					Name:          "some_router_2",
+					RemoteAddress: "10.0.0.253",
+					RemoteAS:      65000,
+				},
+			},
+		},
 		Services: []Service{
 			{
 				Name:          "http",
@@ -35,24 +52,6 @@ func TestConfig(t *testing.T) {
 					{
 						Kind: "assigned_address",
 						Spec: json.RawMessage(`{"interface":"dummy0","ipv4":"10.0.0.128"}`),
-					},
-				},
-				Peers: []Peer{
-					{
-						Name:          "some_router_1",
-						RemoteAddress: "10.0.0.252",
-						RemoteAS:      65000,
-						LocalAddress:  "10.0.0.1",
-						LocalAS:       65999,
-						Routes:        []string{"10.0.0.128/32"},
-					},
-					{
-						Name:          "some_router_2",
-						RemoteAddress: "10.0.0.253",
-						RemoteAS:      65000,
-						LocalAddress:  "10.0.0.1",
-						LocalAS:       65999,
-						Routes:        []string{"10.0.0.128/32"},
 					},
 				},
 			},
@@ -88,6 +87,7 @@ func TestConfig(t *testing.T) {
 			cfg, err := NewFromFile(tc.samplePath)
 			if tc.expError == nil {
 				r.NoError(err)
+				r.Equal(tc.expOut.Announcer, cfg.Announcer)
 				for i := range tc.expOut.Services {
 					r.Equalf(tc.expOut.Services[i].Name, cfg.Services[i].Name, "svc#%d", i)
 					r.Equalf(tc.expOut.Services[i].CheckInterval, cfg.Services[i].CheckInterval, "svc#%d", i)
@@ -96,7 +96,6 @@ func TestConfig(t *testing.T) {
 						r.Equalf(tc.expOut.Services[i].Checks[j].Kind, cfg.Services[i].Checks[j].Kind, "svc#%d check#%d", i, j)
 						r.JSONEqf(string(tc.expOut.Services[i].Checks[j].Spec), string(cfg.Services[i].Checks[j].Spec), "svc#%d check#%d", i, j)
 					}
-					r.Equalf(tc.expOut.Services[i].Peers, cfg.Services[i].Peers, "svc#%d", i)
 				}
 				r.Equal(tc.expOut.Metrics, cfg.Metrics)
 			} else {

@@ -1,4 +1,23 @@
 {
+  "announcer": {
+    "local_address": "10.0.0.1",
+    "local_as": 65999,
+    "routes": [
+      "10.0.0.128/32"
+    ],
+    "peers": [
+      {
+        "name": "some_router_1",
+        "remote_address": "10.0.0.252",
+        "remote_as": 65000
+      },
+      {
+        "name": "some_router_2",
+        "remote_address": "10.0.0.253",
+        "remote_as": 65000
+      }
+    ]
+  },
   "services": [
     {
       "name": "http",
@@ -30,28 +49,6 @@
             "interface": "dummy0",
             "ipv4": "10.0.0.128"
           }
-        }
-      ],
-      "peers": [
-        {
-          "name": "some_router_1",
-          "remote_address": "10.0.0.252",
-          "remote_as": 65000,
-          "local_address": "10.0.0.1",
-          "local_as": 65999,
-          "routes": [
-            "10.0.0.128/32"
-          ]
-        },
-        {
-          "name": "some_router_2",
-          "remote_address": "10.0.0.253",
-          "remote_as": 65000,
-          "local_address": "10.0.0.1",
-          "local_as": 65999,
-          "routes": [
-            "10.0.0.128/32"
-          ]
         }
       ]
     }

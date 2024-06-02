@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
 	apipb "github.com/osrg/gobgp/v3/api"
 	"github.com/osrg/gobgp/v3/pkg/server"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
@@ -129,6 +131,15 @@ func main() {
 
 		g.Go(func() error {
 			return svc.Run(ctx)
+		})
+	}
+
+	if cfg.Metrics.Enabled {
+		log.Debug("metrics server is enabled, initializing ...")
+
+		g.Go(func() error {
+			http.Handle("/metrics", promhttp.Handler())
+			return http.ListenAndServe(cfg.Metrics.Address, nil)
 		})
 	}
 

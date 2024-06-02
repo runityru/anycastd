@@ -11,6 +11,7 @@ import (
 )
 
 type Announcer struct {
+	RouterID     string   `json:"router_id"`
 	LocalAddress string   `json:"local_address"`
 	LocalAS      uint32   `json:"local_as"`
 	Routes       []string `json:"routes"`

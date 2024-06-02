@@ -1,5 +1,6 @@
 ---
 announcer:
+  router_id: 10.3.3.3
   local_address: 10.0.0.1
   local_as: 65999
   routes:

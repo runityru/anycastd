@@ -19,6 +19,7 @@ func TestConfig(t *testing.T) {
 
 	sampleConfig := Config{
 		Announcer: Announcer{
+			RouterID:     "10.3.3.3",
 			LocalAddress: "10.0.0.1",
 			LocalAS:      65999,
 			Routes:       []string{"10.0.0.128/32"},

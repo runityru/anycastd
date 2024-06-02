@@ -1,6 +1,8 @@
 # anycastd
 
 [![Verify](https://github.com/teran/anycastd/actions/workflows/verify.yml/badge.svg?branch=master)](https://github.com/teran/anycastd/actions/workflows/verify.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/teran/anycastd)](https://goreportcard.com/report/github.com/teran/anycastd)
+[![Go Reference](https://pkg.go.dev/badge/github.com/teran/anycastd.svg)](https://pkg.go.dev/github.com/teran/anycastd)
 
 anycastd is aimed to bring new age approaches to classic applications by allowing
 to announce virtual addresses via BGP w/ service-level checks.

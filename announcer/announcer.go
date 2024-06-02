@@ -23,19 +23,22 @@ type Config struct {
 	GoBGP    GoBGPServer
 	Prefixes []string
 	NextHop  string
+	LocalASN uint32
 }
 
 type announcer struct {
 	gobgp    GoBGPServer
 	prefixes []string
-	nexthop  string
+	nextHop  string
+	localASN uint32
 }
 
 func New(cfg Config) Announcer {
 	return &announcer{
 		gobgp:    cfg.GoBGP,
 		prefixes: cfg.Prefixes,
-		nexthop:  cfg.NextHop,
+		nextHop:  cfg.NextHop,
+		localASN: cfg.LocalASN,
 	}
 }
 
@@ -92,13 +95,13 @@ func (a *announcer) newPathList() ([]*api.Path, error) {
 			Origin: 0,
 		})
 		a2, _ := apb.New(&api.NextHopAttribute{
-			NextHop: a.nexthop,
+			NextHop: a.nextHop,
 		})
 		a3, _ := apb.New(&api.AsPathAttribute{
 			Segments: []*api.AsSegment{
 				{
 					Type:    2,
-					Numbers: []uint32{6762, 39919, 65000, 35753, 65000},
+					Numbers: []uint32{a.localASN},
 				},
 			},
 		})

@@ -13,7 +13,7 @@ import (
 type Announcer struct {
 	RouterID     string   `json:"router_id"`
 	LocalAddress string   `json:"local_address"`
-	LocalAS      uint32   `json:"local_as"`
+	LocalASN     uint32   `json:"local_asn"`
 	Routes       []string `json:"routes"`
 	Peers        []Peer   `json:"peers"`
 }
@@ -26,7 +26,7 @@ type Check struct {
 type Peer struct {
 	Name          string `json:"name"`
 	RemoteAddress string `json:"remote_address"`
-	RemoteAS      uint32 `json:"remote_as"`
+	RemoteASN     uint32 `json:"remote_asn"`
 }
 
 type Service struct {

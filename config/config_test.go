@@ -21,18 +21,18 @@ func TestConfig(t *testing.T) {
 		Announcer: Announcer{
 			RouterID:     "10.3.3.3",
 			LocalAddress: "10.0.0.1",
-			LocalAS:      65999,
+			LocalASN:     65999,
 			Routes:       []string{"10.0.0.128/32"},
 			Peers: []Peer{
 				{
 					Name:          "some_router_1",
 					RemoteAddress: "10.0.0.252",
-					RemoteAS:      65000,
+					RemoteASN:     65000,
 				},
 				{
 					Name:          "some_router_2",
 					RemoteAddress: "10.0.0.253",
-					RemoteAS:      65000,
+					RemoteASN:     65000,
 				},
 			},
 		},

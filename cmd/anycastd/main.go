@@ -71,7 +71,7 @@ func main() {
 	if err := bgpSrv.StartBgp(ctx, &apipb.StartBgpRequest{
 		Global: &apipb.Global{
 			RouterId:   cfg.Announcer.RouterID,
-			Asn:        cfg.Announcer.LocalAS,
+			Asn:        cfg.Announcer.LocalASN,
 			ListenPort: -1,
 		},
 	}); err != nil {
@@ -94,7 +94,7 @@ func main() {
 			Peer: &apipb.Peer{
 				Conf: &apipb.PeerConf{
 					NeighborAddress: peer.RemoteAddress,
-					PeerAsn:         peer.RemoteAS,
+					PeerAsn:         peer.RemoteASN,
 				},
 			},
 		})
@@ -126,6 +126,7 @@ func main() {
 			GoBGP:    bgpSrv,
 			Prefixes: cfg.Announcer.Routes,
 			NextHop:  cfg.Announcer.LocalAddress,
+			LocalASN: cfg.Announcer.LocalASN,
 		})
 		svc := service.New(a, checks, time.Duration(svcCfg.CheckInterval))
 

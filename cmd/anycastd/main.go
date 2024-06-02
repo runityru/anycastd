@@ -19,6 +19,7 @@ import (
 	"github.com/teran/anycastd/service"
 
 	// checkers in build
+	_ "github.com/teran/anycastd/checkers/dns_lookup"
 	_ "github.com/teran/anycastd/checkers/http_2xx"
 )
 

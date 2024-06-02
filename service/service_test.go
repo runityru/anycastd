@@ -29,7 +29,7 @@ func TestRunPass(t *testing.T) {
 
 	checkM.On("Check").Return(nil).Once()
 
-	svc := New(announcerM, []checkers.Checker{checkM}, 1*time.Second).(*service)
+	svc := New("test_service", announcerM, []checkers.Checker{checkM}, 1*time.Second).(*service)
 
 	err := svc.run(context.TODO())
 	r.NoError(err)
@@ -48,7 +48,7 @@ func TestRunFail(t *testing.T) {
 
 	checkM.On("Check").Return(errors.New("error")).Once()
 
-	svc := New(announcerM, []checkers.Checker{checkM}, 1*time.Second).(*service)
+	svc := New("test_service", announcerM, []checkers.Checker{checkM}, 1*time.Second).(*service)
 
 	err := svc.run(context.TODO())
 	r.NoError(err)

@@ -16,17 +16,20 @@ type Service interface {
 }
 
 type service struct {
+	name      string
 	announcer announcer.Announcer
 	checks    []checkers.Checker
 	interval  time.Duration
 }
 
 func New(
+	name string,
 	a announcer.Announcer,
 	checks []checkers.Checker,
 	interval time.Duration,
 ) Service {
 	return &service{
+		name:      name,
 		announcer: a,
 		checks:    checks,
 		interval:  interval,
@@ -59,10 +62,12 @@ func (s *service) run(ctx context.Context) error {
 		if err := s.announcer.Announce(ctx); err != nil {
 			log.Warnf("announce error: %s", err)
 		}
+		up.WithLabelValues(s.name).Set(1.0)
 	} else {
 		if err := s.announcer.Denounce(ctx); err != nil {
 			log.Warnf("denounce error: %s", err)
 		}
+		up.WithLabelValues(s.name).Set(0.0)
 	}
 
 	return nil

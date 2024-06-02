@@ -22,15 +22,15 @@ variable. So configuration is divided into two ways:
 
 anycastd allows to set the following options via environment variables:
 
-* CONFIG_PATH (string, default: /config.yaml) - path to the configuration file
-* LOG_LEVEL (ENUM, default: WARN) - logging verbosity level, could one of the:
-  * TRACE
-  * DEBUG
-  * INFO
-  * WARNING
-  * ERROR
-  * FATAL
-  * PANIC
+* `CONFIG_PATH` (string, default: `/config.yaml`) - path to the configuration file
+* `LOG_LEVEL` (ENUM, default: `WARN`) - logging verbosity level, could one of the:
+  * `TRACE`
+  * `DEBUG`
+  * `INFO`
+  * `WARNING`
+  * `ERROR`
+  * `FATAL`
+  * `PANIC`
 
 ### Configuration file
 

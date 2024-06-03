@@ -16,6 +16,8 @@ var _ checkers.Checker = (*assigned_address)(nil)
 type assigned_address struct {
 	iface *string
 	ipv4  string
+
+	interfaceCollector func() (map[string]string, error)
 }
 
 const checkName = "assigned_address"
@@ -32,6 +34,8 @@ func New(s spec) (checkers.Checker, error) {
 	return &assigned_address{
 		iface: s.Interface,
 		ipv4:  s.IPv4,
+
+		interfaceCollector: gatherInterfaces,
 	}, nil
 }
 
@@ -45,7 +49,7 @@ func NewFromSpec(in json.RawMessage) (checkers.Checker, error) {
 }
 
 func (d *assigned_address) Check(ctx context.Context) error {
-	ifaces, err := gatherInterfaces()
+	ifaces, err := d.interfaceCollector()
 	if err != nil {
 		return errors.Wrap(err, "error discovering network interfaces")
 	}

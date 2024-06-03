@@ -17,10 +17,16 @@ func TestCheckHappyPath(t *testing.T) {
 	r := require.New(t)
 
 	c, err := New(spec{
-		IPv4:      "127.0.0.1",
-		Interface: ptr.String("lo0"),
+		IPv4:      "127.0.0.232",
+		Interface: ptr.String("test0"),
 	})
 	r.NoError(err)
+
+	c.(*assigned_address).interfaceCollector = func() (map[string]string, error) {
+		return map[string]string{
+			"127.0.0.232": "test0",
+		}, nil
+	}
 
 	err = c.Check(context.Background())
 	r.NoError(err)
@@ -30,10 +36,16 @@ func TestCheckNotMatchedInterface(t *testing.T) {
 	r := require.New(t)
 
 	c, err := New(spec{
-		IPv4:      "127.0.0.1",
+		IPv4:      "127.0.0.232",
 		Interface: ptr.String("blah0"),
 	})
 	r.NoError(err)
+
+	c.(*assigned_address).interfaceCollector = func() (map[string]string, error) {
+		return map[string]string{
+			"127.0.0.232": "test0",
+		}, nil
+	}
 
 	err = c.Check(context.Background())
 	r.Error(err)
@@ -44,9 +56,15 @@ func TestCheckEmptyInterface(t *testing.T) {
 	r := require.New(t)
 
 	c, err := New(spec{
-		IPv4: "127.0.0.1",
+		IPv4: "127.0.0.232",
 	})
 	r.NoError(err)
+
+	c.(*assigned_address).interfaceCollector = func() (map[string]string, error) {
+		return map[string]string{
+			"127.0.0.232": "test0",
+		}, nil
+	}
 
 	err = c.Check(context.Background())
 	r.NoError(err)
@@ -59,6 +77,12 @@ func TestCheckNotFoundIPv4Address(t *testing.T) {
 		IPv4: "123.45.67.89",
 	})
 	r.NoError(err)
+
+	c.(*assigned_address).interfaceCollector = func() (map[string]string, error) {
+		return map[string]string{
+			"127.0.0.232": "test0",
+		}, nil
+	}
 
 	err = c.Check(context.Background())
 	r.Error(err)

@@ -42,6 +42,7 @@ func TestRunFail(t *testing.T) {
 	defer announcerM.AssertExpectations(t)
 
 	announcerM.On("Announce").Return(nil).Once()
+	announcerM.On("Denounce").Return(nil).Once()
 
 	checkM := checkers.NewMock()
 	defer checkM.AssertExpectations(t)

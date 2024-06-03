@@ -50,24 +50,23 @@ func (s *service) Run(ctx context.Context) error {
 }
 
 func (s *service) run(ctx context.Context) error {
-	successCount := 0
 	for _, check := range s.checks {
 		if err := check.Check(ctx); err != nil {
 			log.Warnf("check failed: %s", err)
+
+			up.WithLabelValues(s.name).Set(0.0)
+
+			if err := s.announcer.Denounce(ctx); err != nil {
+				log.Warnf("denounce failed: %s", err)
+				return nil
+			}
 		}
-		successCount++
 	}
 
-	if successCount == len(s.checks) {
-		if err := s.announcer.Announce(ctx); err != nil {
-			log.Warnf("announce error: %s", err)
-		}
-		up.WithLabelValues(s.name).Set(1.0)
-	} else {
-		if err := s.announcer.Denounce(ctx); err != nil {
-			log.Warnf("denounce error: %s", err)
-		}
-		up.WithLabelValues(s.name).Set(0.0)
+	up.WithLabelValues(s.name).Set(1.0)
+
+	if err := s.announcer.Announce(ctx); err != nil {
+		log.Warnf("announce failed: %s", err)
 	}
 
 	return nil

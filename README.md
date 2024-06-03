@@ -12,7 +12,18 @@ to utilize L3 load balancing and remove announce when something goes wrong on
 particular node? anycastd is exactly for that! No bunch of dedicated services
 and stateful control on BGP routes and no semi-tested Python scripts anymore!
 
-## Configure
+## Usage
+
+anycastd is written as a pretty compact daemon like application so it could
+run in two main ways: via systemd or via docker/podman/any other container
+engine so that's why there's a container image in packages is available in
+parallel with traditional Go binaries.
+
+For monitoring purposes anycastd listens HTTP socket with Prometheus metrics
+endpoint so once routes are removed from the announce SRE's could go and check
+why that happened.
+
+## Configuration
 
 anycastd longs to follow [12factor](https://12factor.net) principles however
 it's not always possible to encode complex data structures into environment
@@ -55,7 +66,6 @@ announcer:
       remote_asn: 65000
 services:
   - name: http
-    check_operator: and
     check_interval: 10s
     checks:
       - kind: http_2xx
@@ -65,6 +75,10 @@ services:
           tries: 3
           interval: 100ms
           timeout: 2s
+      - kind: assigned_address
+        spec:
+          interface: dummy0
+          ipv4: 33.22.11.0
 metrics:
   enabled: true
   address: 127.0.0.1:9090

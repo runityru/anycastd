@@ -130,7 +130,10 @@ func main() {
 			NextHop:  cfg.Announcer.LocalAddress,
 			LocalASN: cfg.Announcer.LocalASN,
 		})
-		svc := service.New(svcCfg.Name, a, checks, time.Duration(svcCfg.CheckInterval))
+
+		metrics := service.NewMetrics()
+
+		svc := service.New(svcCfg.Name, a, checks, time.Duration(svcCfg.CheckInterval), metrics)
 
 		g.Go(func() error {
 			return svc.Run(ctx)

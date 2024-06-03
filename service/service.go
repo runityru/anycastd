@@ -20,6 +20,7 @@ type service struct {
 	announcer announcer.Announcer
 	checks    []checkers.Checker
 	interval  time.Duration
+	metrics   Metrics
 }
 
 func New(
@@ -27,12 +28,14 @@ func New(
 	a announcer.Announcer,
 	checks []checkers.Checker,
 	interval time.Duration,
+	metrics Metrics,
 ) Service {
 	return &service{
 		name:      name,
 		announcer: a,
 		checks:    checks,
 		interval:  interval,
+		metrics:   metrics,
 	}
 }
 
@@ -54,16 +57,17 @@ func (s *service) run(ctx context.Context) error {
 		if err := check.Check(ctx); err != nil {
 			log.Warnf("check failed: %s", err)
 
-			up.WithLabelValues(s.name).Set(0.0)
+			s.metrics.ServiceDown(s.name)
 
 			if err := s.announcer.Denounce(ctx); err != nil {
 				log.Warnf("denounce failed: %s", err)
 				return nil
 			}
+			return nil
 		}
 	}
 
-	up.WithLabelValues(s.name).Set(1.0)
+	s.metrics.ServiceUp(s.name)
 
 	if err := s.announcer.Announce(ctx); err != nil {
 		log.Warnf("announce failed: %s", err)

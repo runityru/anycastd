@@ -4,15 +4,36 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-var up = prometheus.NewGaugeVec(
-	prometheus.GaugeOpts{
-		Namespace: "anycastd",
-		Name:      "up",
-		Help:      "Service liveness status based on checks",
-	},
-	[]string{"service"},
-)
+type Metrics interface {
+	ServiceUp(service string)
+	ServiceDown(service string)
+}
 
-func init() {
-	prometheus.MustRegister(up)
+type metrics struct {
+	upGauge *prometheus.GaugeVec
+}
+
+func NewMetrics() Metrics {
+	upGauge := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "anycastd",
+			Name:      "up",
+			Help:      "Service liveness status based on checks",
+		},
+		[]string{"service"},
+	)
+
+	prometheus.MustRegister(upGauge)
+
+	return &metrics{
+		upGauge: upGauge,
+	}
+}
+
+func (m *metrics) ServiceUp(service string) {
+	m.upGauge.WithLabelValues(service).Set(1.0)
+}
+
+func (m *metrics) ServiceDown(service string) {
+	m.upGauge.WithLabelValues(service).Set(0.0)
 }

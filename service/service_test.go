@@ -7,7 +7,8 @@ import (
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/teran/anycastd/announcer"
 	"github.com/teran/anycastd/checkers"
 )
@@ -16,41 +17,77 @@ func init() {
 	log.SetLevel(log.TraceLevel)
 }
 
-func TestRunPass(t *testing.T) {
-	r := require.New(t)
+func (s *serviceTestSuite) TestRunPass() {
+	s.announcerM.On("Announce").Return(nil).Once()
 
-	announcerM := announcer.NewMock()
-	defer announcerM.AssertExpectations(t)
+	s.checkM.On("Check").Return(nil).Once()
 
-	announcerM.On("Announce").Return(nil).Once()
+	s.metricsM.On("ServiceUp", "test_service").Return().Once()
 
-	checkM := checkers.NewMock()
-	defer checkM.AssertExpectations(t)
+	svc := New("test_service", s.announcerM, []checkers.Checker{s.checkM}, 1*time.Second, s.metricsM).(*service)
 
-	checkM.On("Check").Return(nil).Once()
-
-	svc := New("test_service", announcerM, []checkers.Checker{checkM}, 1*time.Second).(*service)
-
-	err := svc.run(context.TODO())
-	r.NoError(err)
+	err := svc.run(s.ctx)
+	s.Require().NoError(err)
 }
 
-func TestRunFail(t *testing.T) {
-	r := require.New(t)
+func (s *serviceTestSuite) TestRunFail() {
+	s.announcerM.On("Denounce").Return(nil).Once()
 
-	announcerM := announcer.NewMock()
-	defer announcerM.AssertExpectations(t)
+	s.checkM.On("Check").Return(errors.New("error")).Once()
 
-	announcerM.On("Announce").Return(nil).Once()
-	announcerM.On("Denounce").Return(nil).Once()
+	s.metricsM.On("ServiceDown", "test_service").Return().Once()
 
-	checkM := checkers.NewMock()
-	defer checkM.AssertExpectations(t)
+	svc := New("test_service", s.announcerM, []checkers.Checker{s.checkM}, 1*time.Second, s.metricsM).(*service)
 
-	checkM.On("Check").Return(errors.New("error")).Once()
+	err := svc.run(s.ctx)
+	s.Require().NoError(err)
+}
 
-	svc := New("test_service", announcerM, []checkers.Checker{checkM}, 1*time.Second).(*service)
+func (s *serviceTestSuite) TestRunPassThenFailThenPass() {
+	aCall1 := s.announcerM.On("Announce").Return(nil).Once()
+	aCall2 := s.announcerM.On("Denounce").Return(nil).NotBefore(aCall1).Once()
+	s.announcerM.On("Announce").Return(nil).NotBefore(aCall2).Once()
 
-	err := svc.run(context.TODO())
-	r.NoError(err)
+	cCall1 := s.checkM.On("Check").Return(nil).Once()
+	cCall2 := s.checkM.On("Check").Return(errors.New("error")).NotBefore(cCall1).Once()
+	s.checkM.On("Check").Return(nil).NotBefore(cCall2).Once()
+
+	mCall1 := s.metricsM.On("ServiceUp", "test_service").Return().Once()
+	mCall2 := s.metricsM.On("ServiceDown", "test_service").Return().NotBefore(mCall1).Once()
+	s.metricsM.On("ServiceUp", "test_service").Return().NotBefore(mCall2).Once()
+
+	svc := New("test_service", s.announcerM, []checkers.Checker{s.checkM}, 1*time.Second, s.metricsM).(*service)
+
+	for i := 0; i < 3; i++ {
+		err := svc.run(s.ctx)
+		s.Require().NoError(err)
+	}
+}
+
+// Definitions ...
+type serviceTestSuite struct {
+	suite.Suite
+
+	ctx        context.Context
+	announcerM *announcer.Mock
+	checkM     *checkers.Mock
+	metricsM   *MetricsMock
+}
+
+func (s *serviceTestSuite) SetupTest() {
+	s.ctx = context.Background()
+
+	s.announcerM = announcer.NewMock()
+	s.checkM = checkers.NewMock()
+	s.metricsM = NewMetricsMock()
+}
+
+func (s *serviceTestSuite) TearDownTest() {
+	s.announcerM.AssertExpectations(s.T())
+	s.checkM.AssertExpectations(s.T())
+	s.metricsM.AssertExpectations(s.T())
+}
+
+func TestServiceTestSuite(t *testing.T) {
+	suite.Run(t, &serviceTestSuite{})
 }

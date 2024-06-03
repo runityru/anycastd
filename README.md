@@ -80,9 +80,6 @@ which is a preferable way. That's why there's no exec command check ;)
 
 For now the following checks are available:
 
-* dns_lookup - performs DNS lookup
-* http_2xx
-
-Pending checks:
-
 * assigned_address - ensures the address is assigned on interface
+* dns_lookup - performs DNS lookup
+* http_2xx - performs HTTP check and expects 2xx code

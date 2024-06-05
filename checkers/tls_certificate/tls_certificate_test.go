@@ -6,9 +6,14 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	ptr "github.com/teran/go-ptr"
 )
+
+func init() {
+	log.SetLevel(log.TraceLevel)
+}
 
 func TestTLSCertificate(t *testing.T) {
 	type testCase struct {

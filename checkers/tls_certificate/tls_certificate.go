@@ -10,6 +10,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/teran/anycastd/checkers"
 )
@@ -70,6 +71,11 @@ func (s *tls_certificate) Kind() string {
 }
 
 func (s *tls_certificate) Check(ctx context.Context) error {
+	log.WithFields(log.Fields{
+		"check": checkName,
+		"path":  s.path,
+	}).Tracef("running check")
+
 	data, err := os.ReadFile(s.path)
 	if err != nil {
 		return errors.Wrap(err, "error opening certificate file")
@@ -86,6 +92,16 @@ func (s *tls_certificate) Check(ctx context.Context) error {
 	}
 
 	ttl := int(time.Since(crt.NotAfter).Seconds())
+
+	log.WithFields(log.Fields{
+		"check":        checkName,
+		"path":         s.path,
+		"ttl":          ttl,
+		"common_name":  crt.Subject.CommonName,
+		"issuer":       crt.Issuer.CommonName,
+		"dns_names":    crt.DNSNames,
+		"ip_addresses": crt.IPAddresses,
+	}).Tracef("certificate parsed")
 
 	certificateExpiresInSeconds.WithLabelValues(checkName, s.path).Set(float64(ttl))
 

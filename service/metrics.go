@@ -33,7 +33,7 @@ func NewMetrics() (Metrics, error) {
 		prometheus.GaugeOpts{
 			Namespace: "anycastd",
 			Name:      "check_duration_seconds",
-			Help:      "Service liveness status based on checks",
+			Help:      "Duration of check execution in seconds",
 		},
 		[]string{"service", "check"},
 	)

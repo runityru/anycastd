@@ -1,0 +1,23 @@
+---
+announcer:
+  router_id: 10.3.3.3
+  local_address: 10.0.0.1
+  local_asn: 65999
+  routes:
+    - 10.0.0.128/32
+  peers:
+    - name: some_router_1
+      remote_address: 10.0.0.252
+      remote_asn: 65000
+    - name: some_router_2
+      remote_address: 10.0.0.253
+      remote_asn: 65000
+services:
+  - name: http
+    check_interval: 10s
+    checks:
+      - kind: dns_lookup
+        spec: {}
+metrics:
+  enabled: true
+  address: address

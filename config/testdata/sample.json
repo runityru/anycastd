@@ -22,7 +22,6 @@
   "services": [
     {
       "name": "http",
-      "check_operator": "and",
       "check_interval": "10s",
       "checks": [
         {

@@ -39,7 +39,6 @@ func TestConfig(t *testing.T) {
 		Services: []Service{
 			{
 				Name:          "http",
-				CheckOperator: "and",
 				CheckInterval: Duration(time.Duration(10 * time.Second)),
 				Checks: []Check{
 					{
@@ -92,7 +91,6 @@ func TestConfig(t *testing.T) {
 				for i := range tc.expOut.Services {
 					r.Equalf(tc.expOut.Services[i].Name, cfg.Services[i].Name, "svc#%d", i)
 					r.Equalf(tc.expOut.Services[i].CheckInterval, cfg.Services[i].CheckInterval, "svc#%d", i)
-					r.Equalf(tc.expOut.Services[i].CheckOperator, cfg.Services[i].CheckOperator, "svc#%d", i)
 					for j := range tc.expOut.Services[i].Checks {
 						r.Equalf(tc.expOut.Services[i].Checks[j].Kind, cfg.Services[i].Checks[j].Kind, "svc#%d check#%d", i, j)
 						r.JSONEqf(string(tc.expOut.Services[i].Checks[j].Spec), string(cfg.Services[i].Checks[j].Spec), "svc#%d check#%d", i, j)
@@ -105,4 +103,23 @@ func TestConfig(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEmptyConfig(t *testing.T) {
+	r := require.New(t)
+
+	_, err := NewFromFile("testdata/empty.yaml")
+	r.Error(err)
+	r.Equal(
+		"announcer: (local_address: cannot be blank; local_asn: cannot be blank; peers: cannot be blank; router_id: cannot be blank; routes: cannot be blank.); metrics: (address: cannot be blank; enabled: cannot be blank.); services: cannot be blank.",
+		err.Error(),
+	)
+}
+
+func TestEmptyAnnouncerOnlyConfig(t *testing.T) {
+	r := require.New(t)
+
+	// Actually there are no semantics checks so it should pass
+	_, err := NewFromFile("testdata/empty_with_announcer.yaml")
+	r.NoError(err)
 }

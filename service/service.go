@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	"github.com/pkg/errors"
@@ -21,6 +22,8 @@ type service struct {
 	checks    []checkers.Checker
 	interval  time.Duration
 	metrics   Metrics
+
+	announced *atomic.Bool
 }
 
 func New(
@@ -36,6 +39,7 @@ func New(
 		checks:    checks,
 		interval:  interval,
 		metrics:   metrics,
+		announced: &atomic.Bool{},
 	}
 }
 
@@ -59,9 +63,12 @@ func (s *service) run(ctx context.Context) error {
 
 			s.metrics.ServiceDown(s.name)
 
-			if err := s.announcer.Denounce(ctx); err != nil {
-				log.Warnf("denounce failed: %s", err)
-				return nil
+			if s.announced.Load() {
+				if err := s.announcer.Denounce(ctx); err != nil {
+					log.Warnf("denounce failed: %s", err)
+					return nil
+				}
+				s.announced.Store(false)
 			}
 			return nil
 		}
@@ -69,9 +76,14 @@ func (s *service) run(ctx context.Context) error {
 
 	s.metrics.ServiceUp(s.name)
 
-	if err := s.announcer.Announce(ctx); err != nil {
-		log.Warnf("announce failed: %s", err)
+	if !s.announced.Load() {
+		if err := s.announcer.Announce(ctx); err != nil {
+			log.Warnf("announce failed: %s", err)
+			return nil
+		}
 	}
+
+	s.announced.Store(true)
 
 	return nil
 }

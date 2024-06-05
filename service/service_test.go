@@ -31,8 +31,6 @@ func (s *serviceTestSuite) TestRunPass() {
 }
 
 func (s *serviceTestSuite) TestRunFail() {
-	s.announcerM.On("Denounce").Return(nil).Once()
-
 	s.checkM.On("Check").Return(errors.New("error")).Once()
 
 	s.metricsM.On("ServiceDown", "test_service").Return().Once()

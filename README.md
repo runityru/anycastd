@@ -108,4 +108,5 @@ For now the following checks are available:
 * assigned_address - ensures the address is assigned on interface
 * dns_lookup - performs DNS lookup
 * http_2xx - performs HTTP check and expects 2xx code
-* tls_certificate - performs TLS certificate validation
+* tls_certificate - performs TLS certificate validation & provide expiration
+    date via metrics

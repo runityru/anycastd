@@ -54,7 +54,10 @@ func (d *assigned_address) Check(ctx context.Context) error {
 		return errors.Wrap(err, "error discovering network interfaces")
 	}
 
-	log.Tracef("interfaces discovered: %#v", ifaces)
+	log.WithFields(log.Fields{
+		"check":      checkName,
+		"interfaces": ifaces,
+	}).Tracef("discovered interfaces")
 
 	v, ok := ifaces[d.ipv4]
 	if !ok {

@@ -47,7 +47,8 @@ func NewMetrics() (Metrics, error) {
 	}
 
 	return &metrics{
-		upGauge: upGauge,
+		upGauge:       upGauge,
+		checkDuration: checkDuration,
 	}, nil
 }
 

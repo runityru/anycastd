@@ -22,6 +22,7 @@ import (
 	_ "github.com/teran/anycastd/checkers/assigned_address"
 	_ "github.com/teran/anycastd/checkers/dns_lookup"
 	_ "github.com/teran/anycastd/checkers/http_2xx"
+	_ "github.com/teran/anycastd/checkers/tls_certificate"
 )
 
 var (

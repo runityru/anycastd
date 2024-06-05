@@ -131,7 +131,10 @@ func main() {
 			LocalASN: cfg.Announcer.LocalASN,
 		})
 
-		metrics := service.NewMetrics()
+		metrics, err := service.NewMetrics()
+		if err != nil {
+			panic(err)
+		}
 
 		svc := service.New(svcCfg.Name, a, checks, time.Duration(svcCfg.CheckInterval), metrics)
 

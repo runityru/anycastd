@@ -17,11 +17,11 @@ import (
 var (
 	_ checkers.Checker = (*tls_certificate)(nil)
 
-	certificateExpiration = prometheus.NewGaugeVec(
+	certificateExpiresInSeconds = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "anycastd",
-			Name:      "certification_validity_not_after",
-			Help:      "Certificate expiration date",
+			Name:      "certificate_expires_in_seconds",
+			Help:      "Time the certificate expires in (in seconds)",
 		},
 		[]string{"check", "path"},
 	)
@@ -31,7 +31,7 @@ const checkName = "tls_certificate"
 
 func init() {
 	checkers.Register(checkName, NewFromSpec)
-	prometheus.MustRegister(certificateExpiration)
+	prometheus.MustRegister(certificateExpiresInSeconds)
 }
 
 type tls_certificate struct {
@@ -87,7 +87,7 @@ func (s *tls_certificate) Check(ctx context.Context) error {
 
 	ttl := int(time.Since(crt.NotAfter).Seconds())
 
-	certificateExpiration.WithLabelValues(checkName, s.path).Set(float64(ttl))
+	certificateExpiresInSeconds.WithLabelValues(checkName, s.path).Set(float64(ttl))
 
 	if ttl > 0 {
 		return errors.Errorf("Certificate is expired %d seconds ago", ttl)

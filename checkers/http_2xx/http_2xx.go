@@ -54,6 +54,10 @@ func NewFromSpec(in json.RawMessage) (checkers.Checker, error) {
 	return New(s)
 }
 
+func (h *http_2xx) Kind() string {
+	return checkName
+}
+
 func (h *http_2xx) Check(ctx context.Context) error {
 	var lastErr error
 	for i := 0; i < int(h.tries); i++ {

@@ -37,6 +37,10 @@ func newTestChecker(in json.RawMessage) (Checker, error) {
 	return &testChecker{}, nil
 }
 
+func (c *testChecker) Kind() string {
+	return "test"
+}
+
 func (c *testChecker) Check(ctx context.Context) error {
 	return errors.Errorf("test error")
 }

@@ -63,6 +63,10 @@ func NewFromSpec(in json.RawMessage) (checkers.Checker, error) {
 	return New(s)
 }
 
+func (h *dns_lookup) Kind() string {
+	return checkName
+}
+
 func (d *dns_lookup) Check(ctx context.Context) error {
 	var lastErr error
 	for i := 0; i < int(d.tries); i++ {

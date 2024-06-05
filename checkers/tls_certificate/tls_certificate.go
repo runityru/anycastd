@@ -9,16 +9,29 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/teran/anycastd/checkers"
 )
 
-var _ checkers.Checker = (*tls_certificate)(nil)
+var (
+	_ checkers.Checker = (*tls_certificate)(nil)
+
+	certificateExpiration = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "anycastd",
+			Name:      "certification_validity_not_after",
+			Help:      "Certificate expiration date",
+		},
+		[]string{"check", "path"},
+	)
+)
 
 const checkName = "tls_certificate"
 
 func init() {
 	checkers.Register(checkName, NewFromSpec)
+	prometheus.MustRegister(certificateExpiration)
 }
 
 type tls_certificate struct {
@@ -72,7 +85,11 @@ func (s *tls_certificate) Check(ctx context.Context) error {
 		return errors.Wrap(err, "error parsing certificate")
 	}
 
-	if ttl := int(time.Since(crt.NotAfter).Seconds()); ttl > 0 {
+	ttl := int(time.Since(crt.NotAfter).Seconds())
+
+	certificateExpiration.WithLabelValues(checkName, s.path).Set(float64(ttl))
+
+	if ttl > 0 {
 		return errors.Errorf("Certificate is expired %d seconds ago", ttl)
 	}
 

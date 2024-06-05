@@ -84,8 +84,14 @@ services:
           timeout: 2s
       - kind: tls_certificate
         spec:
-          path: /etc/ssl/pki/cert.pem
-          issuer: 
+          local:
+            path: /etc/ssl/pki/cert.pem
+          common_name: Test certificate
+          dns_names:
+            - site.example.org
+          ip_addresses:
+            - 127.0.0.1
+          issuer: Test Issuer
       - kind: assigned_address
         spec:
           interface: dummy0

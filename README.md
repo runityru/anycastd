@@ -68,6 +68,13 @@ services:
   - name: http
     check_interval: 10s
     checks:
+      - kind: dns_lookup
+        spec:
+          query: google.com
+          resolver: 127.0.0.1:53
+          tries: 3
+          interval: 100ms
+          timeout: 3s
       - kind: http_2xx
         spec:
           address: 127.0.0.1:8080
@@ -75,6 +82,10 @@ services:
           tries: 3
           interval: 100ms
           timeout: 2s
+      - kind: tls_certificate
+        spec:
+          path: /etc/ssl/pki/cert.pem
+          issuer: 
       - kind: assigned_address
         spec:
           interface: dummy0
@@ -97,3 +108,4 @@ For now the following checks are available:
 * assigned_address - ensures the address is assigned on interface
 * dns_lookup - performs DNS lookup
 * http_2xx - performs HTTP check and expects 2xx code
+* tls_certificate - performs TLS certificate validation

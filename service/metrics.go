@@ -15,8 +15,8 @@ type Metrics interface {
 }
 
 type metrics struct {
-	upGauge       *prometheus.GaugeVec
-	checkDuration *prometheus.GaugeVec
+	upGauge              *prometheus.GaugeVec
+	checkDurationSeconds *prometheus.GaugeVec
 }
 
 func NewMetrics() (Metrics, error) {
@@ -29,10 +29,10 @@ func NewMetrics() (Metrics, error) {
 		[]string{"service"},
 	)
 
-	checkDuration := prometheus.NewGaugeVec(
+	checkDurationSeconds := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "anycastd",
-			Name:      "check_duration",
+			Name:      "check_duration_seconds",
 			Help:      "Service liveness status based on checks",
 		},
 		[]string{"service", "check"},
@@ -42,13 +42,13 @@ func NewMetrics() (Metrics, error) {
 		return nil, err
 	}
 
-	if err := prometheus.Register(checkDuration); err != nil {
+	if err := prometheus.Register(checkDurationSeconds); err != nil {
 		return nil, err
 	}
 
 	return &metrics{
-		upGauge:       upGauge,
-		checkDuration: checkDuration,
+		upGauge:              upGauge,
+		checkDurationSeconds: checkDurationSeconds,
 	}, nil
 }
 
@@ -65,7 +65,7 @@ func (m *metrics) MeasureCall(ctx context.Context, service, check string, fn fun
 
 	err := fn(ctx)
 
-	m.checkDuration.WithLabelValues(service, check).Set(float64(time.Now().Sub(start)))
+	m.checkDurationSeconds.WithLabelValues(service, check).Set(time.Now().Sub(start).Seconds())
 
 	return err
 }

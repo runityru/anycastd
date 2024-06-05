@@ -13,7 +13,7 @@ type metrics struct {
 	upGauge *prometheus.GaugeVec
 }
 
-func NewMetrics() Metrics {
+func NewMetrics() (Metrics, error) {
 	upGauge := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "anycastd",
@@ -23,11 +23,13 @@ func NewMetrics() Metrics {
 		[]string{"service"},
 	)
 
-	prometheus.MustRegister(upGauge)
+	if err := prometheus.Register(upGauge); err != nil {
+		return nil, err
+	}
 
 	return &metrics{
 		upGauge: upGauge,
-	}
+	}, nil
 }
 
 func (m *metrics) ServiceUp(service string) {

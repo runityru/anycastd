@@ -58,7 +58,7 @@ func (s *service) Run(ctx context.Context) error {
 
 func (s *service) run(ctx context.Context) error {
 	for _, check := range s.checks {
-		if err := check.Check(ctx); err != nil {
+		if err := s.metrics.MeasureCall(ctx, s.name, check.Kind(), check.Check); err != nil {
 			log.Warnf("check failed: %s", err)
 
 			s.metrics.ServiceDown(s.name)

@@ -1,6 +1,8 @@
 package service
 
 import (
+	"context"
+
 	"github.com/stretchr/testify/mock"
 )
 
@@ -20,4 +22,9 @@ func (m *MetricsMock) ServiceUp(service string) {
 
 func (m *MetricsMock) ServiceDown(service string) {
 	m.Called(service)
+}
+
+func (m *MetricsMock) MeasureCall(ctx context.Context, service, check string, fn func(ctx context.Context) error) error {
+	m.Called(service, check)
+	return fn(ctx)
 }

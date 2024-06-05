@@ -9,6 +9,7 @@ import (
 )
 
 type Checker interface {
+	Kind() string
 	Check(ctx context.Context) error
 }
 

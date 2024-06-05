@@ -48,6 +48,10 @@ func NewFromSpec(in json.RawMessage) (checkers.Checker, error) {
 	return New(s)
 }
 
+func (h *assigned_address) Kind() string {
+	return checkName
+}
+
 func (d *assigned_address) Check(ctx context.Context) error {
 	ifaces, err := d.interfaceCollector()
 	if err != nil {

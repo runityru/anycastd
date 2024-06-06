@@ -23,7 +23,7 @@ func NewMetrics() (Metrics, error) {
 	upGauge := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "anycastd",
-			Name:      "up",
+			Name:      "service_up",
 			Help:      "Service liveness status based on checks",
 		},
 		[]string{"service"},

@@ -12,4 +12,5 @@ project feel free to:
 That's all for now, any other particular case could be discused in Discussions
 and/or issues.
 
-But please don't forget to write tests for your code and follow existent practices ;)
+But please don't forget to write tests for your code and follow existent
+practices ;)

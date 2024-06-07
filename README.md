@@ -116,3 +116,66 @@ For now the following checks are available:
 * http_2xx - performs HTTP check and expects 2xx code
 * tls_certificate - performs TLS certificate validation & provide expiration
     date via metrics
+
+## Metrics
+
+A special part of anycastd is a Prometheus-compatible metrics allows monitoring
+systems to notify operators about any changes in their service.
+
+For now anycastd provides the following metrics:
+
+### Service
+
+Service could provide their metrics in order to aggregate current statuses.
+
+| Metric name         | Labels         | Description                             |
+|---------------------|----------------|-----------------------------------------|
+| anycastd_service_up | service, check | Service liveness status based on checks |
+
+### Checks
+
+Check running engine provides the following metrics.
+
+| Metric name                     | Labels         | Description                            |
+|---------------------------------|----------------|----------------------------------------|
+| anycastd_check_duration_seconds | service, check | Duration of check execution in seconds |
+
+In addition some checkers could provide their own metrics the list of them is bellow:
+
+#### tls_certificate check
+
+| Metric name                    | Labels      | Description                                  |
+|--------------------------------|-------------|----------------------------------------------|
+| certificate_expires_in_seconds | check, path | Time the certificate expires in (in seconds) |
+
+### GoBGP
+
+The core of anycastd for BGP communication is GoBGP which allows so gather
+some details about peers, sessions and announces.
+
+| Metric name                                      | Labels          | Description                                                                                         |
+|--------------------------------------------------|-----------------|-----------------------------------------------------------------------------------------------------|
+| anycastd_gobgp_peer_admin_state                  | router_id, peer | Peer state 0=up, 1=down, 2=pfx_ct                                                                   |
+| anycastd_gobgp_peer_count                        | router_id       | Total amount of peers configured for the GoBGP instance                                             |
+| anycastd_gobgp_peer_flops_count                  | router_id, peer | Peer flops count                                                                                    |
+| anycastd_gobgp_peer_out_queue_count              | router_id, peer | Peer outgoing messages queue                                                                        |
+| anycastd_gobgp_peer_password_set_flag            | router_id, peer | Whether the peer have peer password set flag set                                                    |
+| anycastd_gobgp_peer_remove_private_flag          | router_id, peer | Whether the peer have remove private flag set                                                       |
+| anycastd_gobgp_peer_send_community_flag          | router_id, peer | Whether the peer have send community flag set                                                       |
+| anycastd_gobgp_peer_session_state                | router_id, peer | Peer session state 0=unknown, 1=idle, 2=connect, 3=active, 4=opensent, 5=openconfirm, 6=established |
+| anycastd_gobgp_peer_type                         | router_id, peer | Peer type 0=internal, 1=external                                                                    |
+| anycastd_gobgp_received_messages_keepalive       | router_id, peer | Number of Keepalive messages received from the peer                                                 |
+| anycastd_gobgp_received_messages_notification    | router_id, peer | Number of Notification messages received from the peer                                              |
+| anycastd_gobgp_received_messages_open            | router_id, peer | Number of Open messages received from the peer                                                      |
+| anycastd_gobgp_received_messages_refresh         | router_id, peer | Number of Refresh messages received from the peer                                                   |
+| anycastd_gobgp_received_messages_total           | router_id, peer | Total number of messages received from the peer                                                     |
+| anycastd_gobgp_received_messages_update          | router_id, peer | Number of Update messages received from the peer                                                    |
+| anycastd_gobgp_received_messages_withdraw_update | router_id, peer | Number of Withdraw Update messages received from the peer                                           |
+| anycastd_gobgp_sent_messages_keepalive           | router_id, peer | Number of Keepalive messages sent to the peer                                                       |
+| anycastd_gobgp_sent_messages_notification        | router_id, peer | Number of Notification messages sent to the peer                                                    |
+| anycastd_gobgp_sent_messages_open                | router_id, peer | Number of Open messages sent to the peer                                                            |
+| anycastd_gobgp_sent_messages_refresh             | router_id, peer | Number of Refresh messages sent to the peer                                                         |
+| anycastd_gobgp_sent_messages_total               | router_id, peer | Total number of messages sent to the peer                                                           |
+| anycastd_gobgp_sent_messages_update              | router_id, peer | Number of Update messages sent to the peer                                                          |
+| anycastd_gobgp_sent_messages_withdraw_prefix     | router_id, peer | Number of Withdraw Prefix messages sent to the peer                                                 |
+| anycastd_gobgp_sent_messages_withdraw_update     | router_id, peer | Number of Withdraw Update messages sent to the peer                                                 |

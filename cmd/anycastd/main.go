@@ -151,6 +151,15 @@ func main() {
 			http.Handle("/metrics", promhttp.Handler())
 			return http.ListenAndServe(cfg.Metrics.Address, nil)
 		})
+
+		amr := announcer.NewMetricsRepository(bgpSrv, cfg.Announcer.RouterID, cfg.Announcer.LocalASN)
+		if err := amr.Register(); err != nil {
+			panic(err)
+		}
+
+		g.Go(func() error {
+			return amr.Run(ctx)
+		})
 	}
 
 	log.Infof("Initialization completed")
@@ -158,4 +167,15 @@ func main() {
 	if err := g.Wait(); err != nil {
 		panic(err)
 	}
+}
+
+func runGoBGPMetricsCollector(ctx context.Context, bgpSrv *server.BgpServer) error {
+	peers := []*apipb.Peer{}
+	err := bgpSrv.ListPeer(ctx, &apipb.ListPeerRequest{}, func(p *apipb.Peer) {
+		peers = append(peers, p)
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }

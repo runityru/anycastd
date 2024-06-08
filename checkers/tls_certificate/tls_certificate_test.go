@@ -2,6 +2,8 @@ package tls_certificate
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
@@ -13,6 +15,26 @@ import (
 
 func init() {
 	log.SetLevel(log.TraceLevel)
+}
+
+func TestSpec(t *testing.T) {
+	r := require.New(t)
+
+	data, err := os.ReadFile("testdata/spec.json")
+	r.NoError(err)
+
+	c, err := NewFromSpec(json.RawMessage(data))
+	r.NoError(err)
+
+	tc := c.(*tls_certificate)
+	r.Equal("/etc/ssl/cert.pem", tc.path)
+	r.Equal(ptr.String("test cert"), tc.commonName)
+	r.Equal([]string{
+		"test-host.example.org",
+		"test-host-2.example.org",
+	}, tc.dnsNames)
+	r.Equal([]string{"127.0.0.34"}, tc.ipAddresses)
+	r.Equal(ptr.String("test issuer"), tc.issuer)
 }
 
 func TestTLSCertificateLocal(t *testing.T) {

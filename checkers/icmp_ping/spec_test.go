@@ -20,7 +20,7 @@ func TestSpecValidation(t *testing.T) {
 		{
 			name: "valid spec w/ domain name",
 			in: spec{
-				Host:     "test.example.org",
+				Static:   Static{Host: "test.example.org"},
 				Tries:    10,
 				Interval: config.Duration(1 * time.Second),
 				Timeout:  config.Duration(2 * time.Second),
@@ -29,7 +29,7 @@ func TestSpecValidation(t *testing.T) {
 		{
 			name: "valid spec w/ IP address",
 			in: spec{
-				Host:     "127.0.0.1",
+				Static:   Static{Host: "127.0.0.1"},
 				Tries:    10,
 				Interval: config.Duration(1 * time.Second),
 				Timeout:  config.Duration(2 * time.Second),
@@ -39,7 +39,7 @@ func TestSpecValidation(t *testing.T) {
 			name: "empty spec",
 			in:   spec{},
 			expError: errors.New(
-				"host: cannot be blank; interval: cannot be blank; timeout: cannot be blank; tries: cannot be blank.",
+				"interval: cannot be blank; static: (host: cannot be blank.); timeout: cannot be blank; tries: cannot be blank.",
 			),
 		},
 	}

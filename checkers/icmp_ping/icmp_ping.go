@@ -128,7 +128,7 @@ func newWithPinger(
 	pingerFn func(host string, tries uint8, interval, timeout time.Duration) (*pingStats, error),
 ) (checkers.Checker, error) {
 	return &icmp_ping{
-		host:     s.Host,
+		host:     s.Static.Host,
 		tries:    s.Tries,
 		interval: time.Duration(s.Interval),
 		timeout:  time.Duration(s.Timeout),

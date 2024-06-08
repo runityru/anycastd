@@ -1,4 +1,5 @@
 ---
+version: 2
 builds:
   - id: anycastd
     main: ./cmd/anycastd

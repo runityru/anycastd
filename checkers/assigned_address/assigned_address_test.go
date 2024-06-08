@@ -2,6 +2,8 @@ package assigned_address
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"testing"
 
 	log "github.com/sirupsen/logrus"
@@ -11,6 +13,20 @@ import (
 
 func init() {
 	log.SetLevel(log.TraceLevel)
+}
+
+func TestSpec(t *testing.T) {
+	r := require.New(t)
+
+	data, err := os.ReadFile("testdata/spec.json")
+	r.NoError(err)
+
+	c, err := NewFromSpec(json.RawMessage(data))
+	r.NoError(err)
+
+	aa := c.(*assigned_address)
+	r.Equal("127.0.0.33", aa.ipv4)
+	r.Equal("dummy0", *aa.iface)
 }
 
 func TestCheckHappyPath(t *testing.T) {

@@ -10,8 +10,8 @@ type spec struct {
 	IPv4      string  `json:"ipv4"`
 }
 
-func (s *spec) Validate() error {
-	return validation.ValidateStruct(s,
+func (s spec) Validate() error {
+	return validation.ValidateStruct(&s,
 		validation.Field(&s.IPv4, validation.Required, is.IPv4),
 	)
 }

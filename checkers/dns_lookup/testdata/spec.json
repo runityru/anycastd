@@ -1,0 +1,7 @@
+{
+    "query": "example.com",
+    "resolver": "127.0.0.1:53",
+    "tries": 3,
+    "interval": "300ms",
+    "timeout": "3s"
+}

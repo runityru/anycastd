@@ -2,15 +2,47 @@ package dns_lookup
 
 import (
 	"context"
+	"encoding/json"
+	"net"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/teran/anycastd/config"
 )
+
+func TestMkResolver(t *testing.T) {
+	r := require.New(t)
+
+	res := mkResolver("127.0.0.1:53", 3*time.Second)
+	r.NotNil(res)
+
+	nativeResolver := res.(*net.Resolver)
+	r.True(nativeResolver.PreferGo)
+	r.False(nativeResolver.StrictErrors)
+}
+
+func TestSpec(t *testing.T) {
+	r := require.New(t)
+
+	data, err := os.ReadFile("testdata/spec.json")
+	r.NoError(err)
+
+	c, err := NewFromSpec(json.RawMessage(data))
+	r.NoError(err)
+
+	dl := c.(*dns_lookup)
+	r.Equal("example.com", dl.query)
+	r.Equal("127.0.0.1:53", dl.resolver)
+	r.Equal(uint8(3), dl.tries)
+	r.Equal(300*time.Millisecond, dl.interval)
+	r.Equal(3*time.Second, dl.timeout)
+}
 
 func (s *checkTestSuite) TestHappyPath() {
 	l, err := New(spec{

@@ -98,7 +98,8 @@ services:
           ipv4: 33.22.11.0
       - kind: icmp_ping
         spec:
-          host: google.com
+          static:
+            host: google.com
           tries: 3
           interval: 100ms
           timeout: 5s

@@ -14,7 +14,7 @@ func TestCheck(t *testing.T) {
 
 	c, err := newWithPinger(
 		spec{
-			Host:     "127.0.0.1",
+			Static:   Static{Host: "127.0.0.1"},
 			Tries:    10,
 			Interval: config.Duration(10 * time.Second),
 			Timeout:  config.Duration(30 * time.Second),

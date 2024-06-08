@@ -51,9 +51,10 @@ jobs:
       - name: Install dependencies
         run: go mod download
       - name: Build project against .goreleaser.yaml
-        uses: goreleaser/goreleaser-action@v5
+        uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
+          version: '~> v2'
           args: build --snapshot
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -2,15 +2,36 @@ package http_2xx
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+
 	"github.com/teran/anycastd/config"
 )
+
+func TestSpec(t *testing.T) {
+	r := require.New(t)
+
+	data, err := os.ReadFile("testdata/spec.json")
+	r.NoError(err)
+
+	c, err := NewFromSpec(json.RawMessage(data))
+	r.NoError(err)
+
+	h := c.(*http_2xx)
+	r.Equal("example.com", h.url)
+	r.Equal("GET", h.method)
+	r.Equal(uint8(10), h.tries)
+	r.Equal(1*time.Second, h.interval)
+	r.Equal(10*time.Second, h.client.Timeout)
+}
 
 func (s *http2xxTestSuite) TestTrivial() {
 	s.handlerMock.On("ServeHTTP", http.MethodGet, "/ping").Return(http.StatusOK).Once()

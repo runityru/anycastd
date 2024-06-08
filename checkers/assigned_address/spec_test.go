@@ -5,7 +5,6 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-
 	ptr "github.com/teran/go-ptr"
 )
 

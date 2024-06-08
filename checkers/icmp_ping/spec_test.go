@@ -6,6 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
+
 	"github.com/teran/anycastd/config"
 )
 

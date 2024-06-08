@@ -5,6 +5,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var _ gobgpLog.Logger = (*Logger)(nil)
+
 type Logger struct {
 	Logger *log.Logger
 }

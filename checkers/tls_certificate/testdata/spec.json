@@ -1,0 +1,14 @@
+{
+    "local": {
+        "path": "/etc/ssl/cert.pem"
+    },
+    "common_name": "test cert",
+    "dns_names": [
+        "test-host.example.org",
+        "test-host-2.example.org"
+    ],
+    "ip_addresses": [
+        "127.0.0.34"
+    ],
+    "issuer": "test issuer"
+}

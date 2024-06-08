@@ -62,14 +62,20 @@ func newWithCertificateRetriever(s spec, fn func() ([]*x509.Certificate, error))
 		return nil, err
 	}
 
-	return &tls_certificate{
+	tc := &tls_certificate{
 		retrieveCertificates: fn,
 
 		commonName:  s.CommonName,
 		dnsNames:    s.DNSNames,
 		ipAddresses: s.IPAddresses,
 		issuer:      s.Issuer,
-	}, nil
+	}
+
+	if s.Local != nil {
+		tc.path = s.Local.Path
+	}
+
+	return tc, nil
 }
 
 func NewFromSpec(in json.RawMessage) (checkers.Checker, error) {

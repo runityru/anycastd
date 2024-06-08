@@ -1,0 +1,7 @@
+{
+    "url": "example.com",
+    "method": "GET",
+    "tries": 10,
+    "interval": "1s",
+    "timeout": "10s"
+}

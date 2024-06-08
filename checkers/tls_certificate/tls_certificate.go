@@ -4,8 +4,6 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
-	"os"
 	"time"
 
 	"github.com/pkg/errors"
@@ -36,7 +34,10 @@ func init() {
 }
 
 type tls_certificate struct {
-	path        string
+	path string
+
+	retrieveCertificates func() ([]*x509.Certificate, error)
+
 	commonName  *string
 	dnsNames    []string
 	ipAddresses []string
@@ -44,12 +45,26 @@ type tls_certificate struct {
 }
 
 func New(s spec) (checkers.Checker, error) {
+	var fn func() ([]*x509.Certificate, error)
+	if s.Local != nil {
+		fn = getLocalCertificate(*s.Local)
+	} else if s.Remote != nil {
+		fn = getRemoteCertificate(*s.Remote)
+	} else {
+		return nil, errors.New("either local or remote configuration must be defined")
+	}
+
+	return newWithCertificateRetriever(s, fn)
+}
+
+func newWithCertificateRetriever(s spec, fn func() ([]*x509.Certificate, error)) (checkers.Checker, error) {
 	if err := s.Validate(); err != nil {
 		return nil, err
 	}
 
 	return &tls_certificate{
-		path:        s.Local.Path,
+		retrieveCertificates: fn,
+
 		commonName:  s.CommonName,
 		dnsNames:    s.DNSNames,
 		ipAddresses: s.IPAddresses,
@@ -73,23 +88,17 @@ func (s *tls_certificate) Kind() string {
 func (s *tls_certificate) Check(ctx context.Context) error {
 	log.WithFields(log.Fields{
 		"check": checkName,
-		"path":  s.path,
 	}).Tracef("running check")
 
-	data, err := os.ReadFile(s.path)
+	certs, err := s.retrieveCertificates()
 	if err != nil {
-		return errors.Wrap(err, "error opening certificate file")
+		return errors.Wrap(err, "error retrieving certificates")
 	}
 
-	block, _ := pem.Decode(data)
-	if block == nil {
-		return errors.New("empty data block received from PEM container")
+	if len(certs) < 1 {
+		return errors.New("empty certificate list received")
 	}
-
-	crt, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return errors.Wrap(err, "error parsing certificate")
-	}
+	crt := certs[len(certs)-1]
 
 	ttl := int(time.Since(crt.NotAfter).Seconds())
 

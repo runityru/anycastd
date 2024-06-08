@@ -15,7 +15,7 @@ func init() {
 	log.SetLevel(log.TraceLevel)
 }
 
-func TestTLSCertificate(t *testing.T) {
+func TestTLSCertificateLocal(t *testing.T) {
 	type testCase struct {
 		name     string
 		in       spec
@@ -26,41 +26,41 @@ func TestTLSCertificate(t *testing.T) {
 		{
 			name: "simple valid certificate",
 			in: spec{
-				Local: Local{Path: "testdata/test_cert.pem"},
+				Local: &Local{Path: "testdata/test_cert.pem"},
 			},
 		},
 		{
 			name: "simple valid certificate w/ CN check",
 			in: spec{
-				Local:      Local{Path: "testdata/test_cert.pem"},
+				Local:      &Local{Path: "testdata/test_cert.pem"},
 				CommonName: ptr.String("Test certificate"),
 			},
 		},
 		{
 			name: "simple valid certificate w/ DNS check",
 			in: spec{
-				Local:    Local{Path: "testdata/test_cert.pem"},
+				Local:    &Local{Path: "testdata/test_cert.pem"},
 				DNSNames: []string{"test.example.org"},
 			},
 		},
 		{
 			name: "simple valid certificate w/ SAN check",
 			in: spec{
-				Local:       Local{Path: "testdata/test_cert.pem"},
+				Local:       &Local{Path: "testdata/test_cert.pem"},
 				IPAddresses: []string{"127.0.0.1"},
 			},
 		},
 		{
 			name: "simple valid certificate w/ issuer check",
 			in: spec{
-				Local:  Local{Path: "testdata/test_cert.pem"},
-				Issuer: ptr.String("Test certificate"),
+				Local:  &Local{Path: "testdata/test_cert.pem"},
+				Issuer: ptr.String("Test CA"),
 			},
 		},
 		{
 			name: "expired certificate",
 			in: spec{
-				Local:  Local{Path: "testdata/expired_cert.pem"},
+				Local:  &Local{Path: "testdata/expired_cert.pem"},
 				Issuer: ptr.String("Test certificate"),
 			},
 			expError: errors.Errorf(

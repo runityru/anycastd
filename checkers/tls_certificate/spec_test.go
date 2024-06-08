@@ -18,9 +18,9 @@ func TestSpecValidation(t *testing.T) {
 
 	tcs := []testCase{
 		{
-			name: "minimal spec",
+			name: "minimal spec w/ local configuration",
 			in: spec{
-				Local: Local{
+				Local: &Local{
 					Path: "filename",
 				},
 			},
@@ -28,7 +28,7 @@ func TestSpecValidation(t *testing.T) {
 		{
 			name: "valid full spec",
 			in: spec{
-				Local: Local{
+				Local: &Local{
 					Path: "filename",
 				},
 				CommonName:  ptr.String("Some subject common name"),
@@ -40,7 +40,7 @@ func TestSpecValidation(t *testing.T) {
 		{
 			name: "invalid DNS name",
 			in: spec{
-				Local: Local{
+				Local: &Local{
 					Path: "filename",
 				},
 				DNSNames: []string{"blah!"},
@@ -52,7 +52,7 @@ func TestSpecValidation(t *testing.T) {
 		{
 			name: "invalid IP address",
 			in: spec{
-				Local: Local{
+				Local: &Local{
 					Path: "filename",
 				},
 				IPAddresses: []string{"blah"},
@@ -62,10 +62,18 @@ func TestSpecValidation(t *testing.T) {
 			),
 		},
 		{
+			name: "minimal spec w/ remote configuration",
+			in: spec{
+				Remote: &Remote{
+					Address: "127.0.0.1:1345",
+				},
+			},
+		},
+		{
 			name: "empty spec",
 			in:   spec{},
 			expError: errors.New(
-				"local: (path: cannot be blank.).",
+				"local: either remote or local configuration must be defined; remote: either remote or local configuration must be defined.",
 			),
 		},
 	}

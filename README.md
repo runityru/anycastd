@@ -155,6 +155,19 @@ In addition some checkers could provide their own metrics the list of them is be
 |--------------------------------|-------------|----------------------------------------------|
 | certificate_expires_in_seconds | check, path | Time the certificate expires in (in seconds) |
 
+#### icmp_ping check
+
+| Metric name                                      | Labels      | Description                                |
+|--------------------------------------------------|-------------|--------------------------------------------|
+| anycastd_check_avg_rtt_seconds                   | check, host | Avg RTT of ICMP checks                     |
+| anycastd_check_loss_percent                      | check, host | Percent of packet loss                     |
+| anycastd_check_max_rtt_seconds                   | check, host | Max RTT of ICMP checks                     |
+| anycastd_check_min_rtt_seconds                   | check, host | Min RTT of ICMP checks                     |
+| anycastd_check_packets_received_duplicates_total | check, host | Total amount of duplicate packets received |
+| anycastd_check_packets_received_total            | check, host | Total amount of packets received           |
+| anycastd_check_packets_sent_total                | check, host | Total amount of packets sent               |
+| anycastd_check_std_dev_rtt_seconds               | check, host | Standard deviation RTT of ICMP checks      |
+
 ### GoBGP
 
 The core of anycastd for BGP communication is GoBGP which allows so gather

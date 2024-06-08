@@ -96,6 +96,12 @@ services:
         spec:
           interface: dummy0
           ipv4: 33.22.11.0
+      - kind: icmp_ping
+        spec:
+          host: google.com
+          tries: 3
+          interval: 100ms
+          timeout: 5s
 metrics:
   enabled: true
   address: 127.0.0.1:9090
@@ -116,6 +122,7 @@ For now the following checks are available:
 * http_2xx - performs HTTP check and expects 2xx code
 * tls_certificate - performs TLS certificate validation & provide expiration
     date via metrics
+* icmp_ping - performs ICMP ping to the specified host
 
 ## Metrics
 

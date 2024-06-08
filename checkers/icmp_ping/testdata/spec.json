@@ -1,0 +1,8 @@
+{
+    "static": {
+        "host": "127.0.0.33"
+    },
+    "tries": 5,
+    "interval": "100ms",
+    "timeout": "5s"
+}

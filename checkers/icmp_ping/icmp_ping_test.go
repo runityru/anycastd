@@ -2,12 +2,31 @@ package icmp_ping
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+
 	"github.com/teran/anycastd/config"
 )
+
+func TestSpec(t *testing.T) {
+	r := require.New(t)
+
+	data, err := os.ReadFile("testdata/spec.json")
+	r.NoError(err)
+
+	c, err := NewFromSpec(json.RawMessage(data))
+	r.NoError(err)
+
+	p := c.(*icmp_ping)
+	r.Equal("127.0.0.33", p.host)
+	r.Equal(uint8(5), p.tries)
+	r.Equal(100*time.Millisecond, p.interval)
+	r.Equal(5*time.Second, p.timeout)
+}
 
 func TestCheck(t *testing.T) {
 	r := require.New(t)

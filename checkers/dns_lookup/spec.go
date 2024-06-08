@@ -15,8 +15,8 @@ type spec struct {
 	Timeout  config.Duration `json:"timeout"`
 }
 
-func (s *spec) Validate() error {
-	return validation.ValidateStruct(s,
+func (s spec) Validate() error {
+	return validation.ValidateStruct(&s,
 		validation.Field(&s.Query, validation.Required, is.DNSName),
 		validation.Field(&s.Resolver, validation.Required, is.DialString),
 		validation.Field(&s.Tries, validation.Required),

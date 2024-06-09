@@ -129,7 +129,7 @@ For now the following checks are available:
 * dns_lookup - performs DNS lookup
 * http_2xx - performs HTTP check and expects 2xx code
 * icmp_ping - performs ICMP ping to the specified host
-* tftp_get - performs TFTP GET request to specified URL
+* tftp_rrq - performs TFTP GET request to specified URL
 * tls_certificate - performs TLS certificate validation & provide expiration
     date via metrics
 

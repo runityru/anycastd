@@ -104,6 +104,12 @@ services:
           tries: 3
           interval: 100ms
           timeout: 5s
+      - kind: tftp_rrq
+        spec:
+          url: tftp://127.0.0.1:69/lpxelinux.0
+          tries: 3
+          interval: 100ms
+          timeout: 5s
 metrics:
   enabled: true
   address: 127.0.0.1:9090
@@ -122,9 +128,10 @@ For now the following checks are available:
 * assigned_address - ensures the address is assigned on interface
 * dns_lookup - performs DNS lookup
 * http_2xx - performs HTTP check and expects 2xx code
+* icmp_ping - performs ICMP ping to the specified host
+* tftp_get - performs TFTP GET request to specified URL
 * tls_certificate - performs TLS certificate validation & provide expiration
     date via metrics
-* icmp_ping - performs ICMP ping to the specified host
 
 ## Metrics
 

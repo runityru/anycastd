@@ -77,7 +77,8 @@ services:
           timeout: 3s
       - kind: http_2xx
         spec:
-          address: 127.0.0.1:8080
+          url: http://127.0.0.1:8080
+          method: GET
           path: /
           tries: 3
           interval: 100ms

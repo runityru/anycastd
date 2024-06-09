@@ -23,6 +23,7 @@ import (
 	_ "github.com/teran/anycastd/checkers/dns_lookup"
 	_ "github.com/teran/anycastd/checkers/http_2xx"
 	_ "github.com/teran/anycastd/checkers/icmp_ping"
+	_ "github.com/teran/anycastd/checkers/tftp_rrq"
 	_ "github.com/teran/anycastd/checkers/tls_certificate"
 )
 

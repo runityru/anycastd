@@ -104,6 +104,8 @@ func (t *tftp_rrq) check(context.Context) error {
 		return errors.Wrap(err, "error creating TFTP client")
 	}
 
+	c.SetTimeout(t.timeout)
+
 	wt, err := c.Receive(path, "octet")
 	if err != nil {
 		return errors.Wrap(err, "error receiving file")

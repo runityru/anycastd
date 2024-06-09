@@ -18,7 +18,11 @@ import (
 
 var _ checkers.Checker = (*tftp_rrq)(nil)
 
-const checkName = "http_2xx"
+const checkName = "tftp_rrq"
+
+func init() {
+	checkers.Register(checkName, NewFromSpec)
+}
 
 type tftp_rrq struct {
 	url       string

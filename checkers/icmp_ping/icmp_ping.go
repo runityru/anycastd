@@ -130,8 +130,8 @@ func newWithPinger(
 	return &icmp_ping{
 		host:     s.Static.Host,
 		tries:    s.Tries,
-		interval: time.Duration(s.Interval),
-		timeout:  time.Duration(s.Timeout),
+		interval: s.Interval.TimeDuration(),
+		timeout:  s.Timeout.TimeDuration(),
 
 		pingerFn: pingerFn,
 	}, nil

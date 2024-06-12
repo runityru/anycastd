@@ -41,8 +41,8 @@ func New(s spec) (checkers.Checker, error) {
 		url:       s.URL,
 		expSHA256: s.ExpectedSHA256,
 		tries:     s.Tries,
-		interval:  time.Duration(s.Interval),
-		timeout:   time.Duration(s.Timeout),
+		interval:  s.Interval.TimeDuration(),
+		timeout:   s.Timeout.TimeDuration(),
 	}, nil
 }
 

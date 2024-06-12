@@ -6,8 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-
-	"github.com/teran/anycastd/config"
+	th "github.com/teran/go-time"
 )
 
 func TestSpecValidation(t *testing.T) {
@@ -23,8 +22,8 @@ func TestSpecValidation(t *testing.T) {
 			in: spec{
 				Static:   Static{Host: "test.example.org"},
 				Tries:    10,
-				Interval: config.Duration(1 * time.Second),
-				Timeout:  config.Duration(2 * time.Second),
+				Interval: th.Duration(1 * time.Second),
+				Timeout:  th.Duration(2 * time.Second),
 			},
 		},
 		{
@@ -32,8 +31,8 @@ func TestSpecValidation(t *testing.T) {
 			in: spec{
 				Static:   Static{Host: "127.0.0.1"},
 				Tries:    10,
-				Interval: config.Duration(1 * time.Second),
-				Timeout:  config.Duration(2 * time.Second),
+				Interval: th.Duration(1 * time.Second),
+				Timeout:  th.Duration(2 * time.Second),
 			},
 		},
 		{

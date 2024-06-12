@@ -6,8 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-
-	"github.com/teran/anycastd/config"
+	th "github.com/teran/go-time"
 )
 
 func TestSpecValidation(t *testing.T) {
@@ -24,8 +23,8 @@ func TestSpecValidation(t *testing.T) {
 				URL:      "http://127.0.0.1:8080/",
 				Method:   "GET",
 				Tries:    3,
-				Interval: config.Duration(1 * time.Second),
-				Timeout:  config.Duration(5 * time.Second),
+				Interval: th.Duration(1 * time.Second),
+				Timeout:  th.Duration(5 * time.Second),
 			},
 		},
 		{

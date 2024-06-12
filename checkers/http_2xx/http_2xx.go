@@ -30,7 +30,7 @@ type http_2xx struct {
 
 func New(s spec) (checkers.Checker, error) {
 	client := &http.Client{
-		Timeout: time.Duration(s.Timeout),
+		Timeout: s.Timeout.TimeDuration(),
 	}
 
 	if err := s.Validate(); err != nil {
@@ -42,7 +42,7 @@ func New(s spec) (checkers.Checker, error) {
 		url:      s.URL,
 		method:   s.Method,
 		tries:    s.Tries,
-		interval: time.Duration(s.Interval),
+		interval: s.Interval.TimeDuration(),
 	}, nil
 }
 

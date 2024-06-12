@@ -12,8 +12,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-
-	"github.com/teran/anycastd/config"
+	th "github.com/teran/go-time"
 )
 
 func TestSpec(t *testing.T) {
@@ -40,8 +39,8 @@ func (s *http2xxTestSuite) TestTrivial() {
 		URL:      s.srv.URL + "/ping",
 		Method:   "GET",
 		Tries:    1,
-		Interval: config.Duration(1 * time.Second),
-		Timeout:  config.Duration(5 * time.Second),
+		Interval: th.Duration(1 * time.Second),
+		Timeout:  th.Duration(5 * time.Second),
 	})
 	s.Require().NoError(err)
 
@@ -56,8 +55,8 @@ func (s *http2xxTestSuite) TestFiveTries() {
 		URL:      s.srv.URL + "/ping",
 		Method:   "GET",
 		Tries:    5,
-		Interval: config.Duration(1 * time.Second),
-		Timeout:  config.Duration(5 * time.Second),
+		Interval: th.Duration(1 * time.Second),
+		Timeout:  th.Duration(5 * time.Second),
 	})
 	s.Require().NoError(err)
 
@@ -74,8 +73,8 @@ func (s *http2xxTestSuite) TestSuccessFromThirdTime() {
 		URL:      s.srv.URL + "/ping",
 		Method:   "GET",
 		Tries:    3,
-		Interval: config.Duration(1 * time.Millisecond),
-		Timeout:  config.Duration(5 * time.Second),
+		Interval: th.Duration(1 * time.Millisecond),
+		Timeout:  th.Duration(5 * time.Second),
 	})
 	s.Require().NoError(err)
 
@@ -90,8 +89,8 @@ func (s *http2xxTestSuite) TestNegative() {
 		URL:      s.srv.URL + "/ping",
 		Method:   "GET",
 		Tries:    2,
-		Interval: config.Duration(1 * time.Millisecond),
-		Timeout:  config.Duration(5 * time.Second),
+		Interval: th.Duration(1 * time.Millisecond),
+		Timeout:  th.Duration(5 * time.Second),
 	})
 	s.Require().NoError(err)
 

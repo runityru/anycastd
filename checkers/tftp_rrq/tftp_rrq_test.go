@@ -15,8 +15,8 @@ import (
 	"github.com/pin/tftp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-	"github.com/teran/anycastd/config"
 	"github.com/teran/go-ptr"
+	th "github.com/teran/go-time"
 )
 
 func TestSpec(t *testing.T) {
@@ -52,8 +52,8 @@ func TestCheck(t *testing.T) {
 				return spec{
 					URL:      fmt.Sprintf("tftp://%s/test", address),
 					Tries:    3,
-					Interval: config.Duration(100 * time.Millisecond),
-					Timeout:  config.Duration(1 * time.Second),
+					Interval: th.Duration(100 * time.Millisecond),
+					Timeout:  th.Duration(1 * time.Second),
 				}
 			},
 		},
@@ -64,8 +64,8 @@ func TestCheck(t *testing.T) {
 					URL:            fmt.Sprintf("tftp://%s/test", address),
 					ExpectedSHA256: ptr.String(mockChecksum),
 					Tries:          3,
-					Interval:       config.Duration(100 * time.Millisecond),
-					Timeout:        config.Duration(1 * time.Second),
+					Interval:       th.Duration(100 * time.Millisecond),
+					Timeout:        th.Duration(1 * time.Second),
 				}
 			},
 		},
@@ -76,8 +76,8 @@ func TestCheck(t *testing.T) {
 					URL:            fmt.Sprintf("tftp://%s/test", address),
 					ExpectedSHA256: ptr.String(strings.ReplaceAll(mockChecksum, "a", "b")),
 					Tries:          3,
-					Interval:       config.Duration(100 * time.Millisecond),
-					Timeout:        config.Duration(1 * time.Second),
+					Interval:       th.Duration(100 * time.Millisecond),
+					Timeout:        th.Duration(1 * time.Second),
 				}
 			},
 			expError: errors.Errorf(

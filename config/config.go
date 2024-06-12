@@ -10,6 +10,7 @@ import (
 	validation "github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/go-ozzo/ozzo-validation/v4/is"
 	"github.com/pkg/errors"
+	th "github.com/teran/go-time"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -69,9 +70,9 @@ func (p Peer) Validate() error {
 }
 
 type Service struct {
-	Name          string   `json:"name"`
-	CheckInterval Duration `json:"check_interval"`
-	Checks        []Check  `json:"checks"`
+	Name          string      `json:"name"`
+	CheckInterval th.Duration `json:"check_interval"`
+	Checks        []Check     `json:"checks"`
 }
 
 func (s Service) Validate() error {

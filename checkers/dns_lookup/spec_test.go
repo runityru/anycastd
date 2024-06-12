@@ -6,8 +6,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
-
-	"github.com/teran/anycastd/config"
+	th "github.com/teran/go-time"
 )
 
 func TestSpecValidation(t *testing.T) {
@@ -24,8 +23,8 @@ func TestSpecValidation(t *testing.T) {
 				Query:    "example.com",
 				Resolver: "127.0.0.1:53",
 				Tries:    3,
-				Interval: config.Duration(1 * time.Second),
-				Timeout:  config.Duration(5 * time.Second),
+				Interval: th.Duration(1 * time.Second),
+				Timeout:  th.Duration(5 * time.Second),
 			},
 		},
 		{
@@ -34,8 +33,8 @@ func TestSpecValidation(t *testing.T) {
 				Query:    "blah!",
 				Resolver: "127.0.0.1:53",
 				Tries:    3,
-				Interval: config.Duration(1 * time.Second),
-				Timeout:  config.Duration(5 * time.Second),
+				Interval: th.Duration(1 * time.Second),
+				Timeout:  th.Duration(5 * time.Second),
 			},
 			expError: errors.New("query: must be a valid DNS name."),
 		},
@@ -45,8 +44,8 @@ func TestSpecValidation(t *testing.T) {
 				Query:    "example.com",
 				Resolver: "!!!",
 				Tries:    3,
-				Interval: config.Duration(1 * time.Second),
-				Timeout:  config.Duration(5 * time.Second),
+				Interval: th.Duration(1 * time.Second),
+				Timeout:  th.Duration(5 * time.Second),
 			},
 			expError: errors.New("resolver: must be a valid dial string."),
 		},

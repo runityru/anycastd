@@ -40,7 +40,7 @@ func TestConfig(t *testing.T) {
 		Services: []Service{
 			{
 				Name:          "http",
-				CheckInterval: th.Duration(time.Duration(10 * time.Second)),
+				CheckInterval: th.Duration(10 * time.Second),
 				Checks: []Check{
 					{
 						Kind: "dns_lookup",

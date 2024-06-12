@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/kelseyhightower/envconfig"
 	apipb "github.com/osrg/gobgp/v3/api"
@@ -139,7 +138,7 @@ func main() {
 			panic(err)
 		}
 
-		svc := service.New(svcCfg.Name, a, checks, time.Duration(svcCfg.CheckInterval), metrics)
+		svc := service.New(svcCfg.Name, a, checks, svcCfg.CheckInterval.TimeDuration(), metrics)
 
 		g.Go(func() error {
 			return svc.Run(ctx)

@@ -12,8 +12,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-
-	"github.com/teran/anycastd/config"
+	th "github.com/teran/go-time"
 )
 
 func TestMkResolver(t *testing.T) {
@@ -49,8 +48,8 @@ func (s *checkTestSuite) TestHappyPath() {
 		Query:    "example.com",
 		Resolver: "127.0.0.1:53",
 		Tries:    3,
-		Interval: config.Duration(2 * time.Second),
-		Timeout:  config.Duration(5 * time.Second),
+		Interval: th.Duration(2 * time.Second),
+		Timeout:  th.Duration(5 * time.Second),
 	})
 	s.Require().NoError(err)
 
@@ -68,8 +67,8 @@ func (s *checkTestSuite) TestSecondTry() {
 		Query:    "example.com",
 		Resolver: "127.0.0.1:53",
 		Tries:    3,
-		Interval: config.Duration(2 * time.Second),
-		Timeout:  config.Duration(5 * time.Second),
+		Interval: th.Duration(2 * time.Second),
+		Timeout:  th.Duration(5 * time.Second),
 	})
 	s.Require().NoError(err)
 

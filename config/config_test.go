@@ -7,6 +7,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
+	th "github.com/teran/go-time"
 )
 
 func TestConfig(t *testing.T) {
@@ -39,7 +40,7 @@ func TestConfig(t *testing.T) {
 		Services: []Service{
 			{
 				Name:          "http",
-				CheckInterval: Duration(time.Duration(10 * time.Second)),
+				CheckInterval: th.Duration(time.Duration(10 * time.Second)),
 				Checks: []Check{
 					{
 						Kind: "dns_lookup",

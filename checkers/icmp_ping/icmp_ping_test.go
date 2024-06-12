@@ -8,8 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/teran/anycastd/config"
+	th "github.com/teran/go-time"
 )
 
 func TestSpec(t *testing.T) {
@@ -35,8 +34,8 @@ func TestCheck(t *testing.T) {
 		spec{
 			Static:   Static{Host: "127.0.0.1"},
 			Tries:    10,
-			Interval: config.Duration(10 * time.Second),
-			Timeout:  config.Duration(30 * time.Second),
+			Interval: th.Duration(10 * time.Second),
+			Timeout:  th.Duration(30 * time.Second),
 		},
 		func(host string, tries uint8, interval, timeout time.Duration) (*pingStats, error) {
 			r.Equal("127.0.0.1", host)

@@ -6,8 +6,8 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
+	th "github.com/teran/go-time"
 
-	"github.com/teran/anycastd/config"
 	"github.com/teran/go-ptr"
 )
 
@@ -24,8 +24,8 @@ func TestSpecValidation(t *testing.T) {
 			in: spec{
 				URL:      "tftp://127.0.0.1:69/lpxelinux.0",
 				Tries:    3,
-				Interval: config.Duration(1 * time.Second),
-				Timeout:  config.Duration(2 * time.Second),
+				Interval: th.Duration(1 * time.Second),
+				Timeout:  th.Duration(2 * time.Second),
 			},
 		},
 		{
@@ -34,8 +34,8 @@ func TestSpecValidation(t *testing.T) {
 				URL:            "tftp://127.0.0.1:69/lpxelinux.0",
 				ExpectedSHA256: ptr.String("09da9c01b6b2a8ccc5d3445c4f364243d8a063bd0bf520643737899e6ce0170f"),
 				Tries:          3,
-				Interval:       config.Duration(1 * time.Second),
-				Timeout:        config.Duration(2 * time.Second),
+				Interval:       th.Duration(1 * time.Second),
+				Timeout:        th.Duration(2 * time.Second),
 			},
 		},
 		{
@@ -51,8 +51,8 @@ func TestSpecValidation(t *testing.T) {
 				URL:            "tftp://127.0.0.1:69/lpxelinux.0",
 				ExpectedSHA256: ptr.String("09da9c01b6b2a8ccc5d3445c4f364243d8a063bd0bf520643737899e6ce0170s"),
 				Tries:          3,
-				Interval:       config.Duration(1 * time.Second),
-				Timeout:        config.Duration(2 * time.Second),
+				Interval:       th.Duration(1 * time.Second),
+				Timeout:        th.Duration(2 * time.Second),
 			},
 			expError: errors.New("expected_sha256: must be a valid hexadecimal number."),
 		},
@@ -62,8 +62,8 @@ func TestSpecValidation(t *testing.T) {
 				URL:            "tftp://127.0.0.1:69/lpxelinux.0",
 				ExpectedSHA256: ptr.String("deadbeef"),
 				Tries:          3,
-				Interval:       config.Duration(1 * time.Second),
-				Timeout:        config.Duration(2 * time.Second),
+				Interval:       th.Duration(1 * time.Second),
+				Timeout:        th.Duration(2 * time.Second),
 			},
 			expError: errors.New("expected_sha256: the length must be exactly 64."),
 		},

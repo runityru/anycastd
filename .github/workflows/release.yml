@@ -81,6 +81,7 @@ jobs:
           platforms: amd64
           push: true
           tags: |
+            ghcr.io/${{ github.repository }}:latest
             ghcr.io/${{ github.repository }}:${{ github.ref_name }}
             ghcr.io/${{ github.repository }}:${{ github.ref_name }}-${{ steps.timestamp.outputs.now }}
           outputs: type=image,name=ghcr.io/${{ github.repository }},annotation-index.org.opencontainers.image.description=${{ github.repository }}

@@ -6,14 +6,25 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	th "github.com/teran/go-time"
 )
+
+var goDefaultHeaders = http.Header{
+	"Accept-Encoding": []string{"gzip"},
+	"User-Agent":      []string{"Go-http-client/1.1"},
+}
+
+func init() {
+	log.SetLevel(log.TraceLevel)
+}
 
 func TestSpec(t *testing.T) {
 	r := require.New(t)
@@ -33,7 +44,7 @@ func TestSpec(t *testing.T) {
 }
 
 func (s *http2xxTestSuite) TestTrivial() {
-	s.handlerMock.On("ServeHTTP", http.MethodGet, "/ping").Return(http.StatusOK).Once()
+	s.handlerMock.On("ServeHTTP", http.MethodGet, strings.TrimPrefix(s.srv.URL, "http://"), goDefaultHeaders, "/ping").Return(http.StatusOK).Once()
 
 	c, err := New(spec{
 		URL:      s.srv.URL + "/ping",
@@ -48,8 +59,31 @@ func (s *http2xxTestSuite) TestTrivial() {
 	s.Require().NoError(err)
 }
 
+func (s *http2xxTestSuite) TestTrivialWithHeaders() {
+	v := goDefaultHeaders
+	v["X-Test-Header"] = []string{"x-test-value"}
+
+	s.handlerMock.On("ServeHTTP", http.MethodGet, "example.com", v, "/ping").Return(http.StatusOK).Once()
+
+	c, err := New(spec{
+		URL:    s.srv.URL + "/ping",
+		Method: "GET",
+		Headers: map[string]string{
+			"Host":          "example.com",
+			"X-Test-Header": "x-test-value",
+		},
+		Tries:    1,
+		Interval: th.Duration(1 * time.Second),
+		Timeout:  th.Duration(5 * time.Second),
+	})
+	s.Require().NoError(err)
+
+	err = c.Check(context.TODO())
+	s.Require().NoError(err)
+}
+
 func (s *http2xxTestSuite) TestFiveTries() {
-	s.handlerMock.On("ServeHTTP", http.MethodGet, "/ping").Return(http.StatusOK).Once()
+	s.handlerMock.On("ServeHTTP", http.MethodGet, strings.TrimPrefix(s.srv.URL, "http://"), goDefaultHeaders, "/ping").Return(http.StatusOK).Once()
 
 	c, err := New(spec{
 		URL:      s.srv.URL + "/ping",
@@ -65,9 +99,9 @@ func (s *http2xxTestSuite) TestFiveTries() {
 }
 
 func (s *http2xxTestSuite) TestSuccessFromThirdTime() {
-	s.handlerMock.On("ServeHTTP", http.MethodGet, "/ping").Return(http.StatusServiceUnavailable).Once()
-	s.handlerMock.On("ServeHTTP", http.MethodGet, "/ping").Return(http.StatusServiceUnavailable).Once()
-	s.handlerMock.On("ServeHTTP", http.MethodGet, "/ping").Return(http.StatusOK).Once()
+	s.handlerMock.On("ServeHTTP", http.MethodGet, strings.TrimPrefix(s.srv.URL, "http://"), goDefaultHeaders, "/ping").Return(http.StatusServiceUnavailable).Once()
+	s.handlerMock.On("ServeHTTP", http.MethodGet, strings.TrimPrefix(s.srv.URL, "http://"), goDefaultHeaders, "/ping").Return(http.StatusServiceUnavailable).Once()
+	s.handlerMock.On("ServeHTTP", http.MethodGet, strings.TrimPrefix(s.srv.URL, "http://"), goDefaultHeaders, "/ping").Return(http.StatusOK).Once()
 
 	c, err := New(spec{
 		URL:      s.srv.URL + "/ping",
@@ -83,7 +117,7 @@ func (s *http2xxTestSuite) TestSuccessFromThirdTime() {
 }
 
 func (s *http2xxTestSuite) TestNegative() {
-	s.handlerMock.On("ServeHTTP", http.MethodGet, "/ping").Return(http.StatusServiceUnavailable).Twice()
+	s.handlerMock.On("ServeHTTP", http.MethodGet, strings.TrimPrefix(s.srv.URL, "http://"), goDefaultHeaders, "/ping").Return(http.StatusServiceUnavailable).Twice()
 
 	c, err := New(spec{
 		URL:      s.srv.URL + "/ping",
@@ -130,7 +164,7 @@ type handlerMock struct {
 }
 
 func (m *handlerMock) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
-	args := m.Called(r.Method, r.URL.Path)
+	args := m.Called(r.Method, r.Host, r.Header, r.URL.Path)
 
 	rw.WriteHeader(args.Int(0))
 }

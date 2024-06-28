@@ -79,6 +79,8 @@ services:
         spec:
           url: http://127.0.0.1:8080
           method: GET
+          headers:
+            Host: example.com
           path: /
           tries: 3
           interval: 100ms

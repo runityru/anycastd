@@ -24,6 +24,7 @@ type http_2xx struct {
 	client   *http.Client
 	url      string
 	method   string
+	headers  map[string]string
 	tries    uint8
 	interval time.Duration
 }
@@ -41,6 +42,7 @@ func New(s spec) (checkers.Checker, error) {
 		client:   client,
 		url:      s.URL,
 		method:   s.Method,
+		headers:  s.Headers,
 		tries:    s.Tries,
 		interval: s.Interval.TimeDuration(),
 	}, nil
@@ -93,6 +95,14 @@ func (h *http_2xx) check(ctx context.Context) error {
 	req, err := http.NewRequestWithContext(ctx, h.method, h.url, nil)
 	if err != nil {
 		return err
+	}
+
+	for k, v := range h.headers {
+		req.Header.Set(k, v)
+	}
+
+	if v := req.Header.Get("Host"); v != "" {
+		req.Host = v
 	}
 
 	resp, err := h.client.Do(req)

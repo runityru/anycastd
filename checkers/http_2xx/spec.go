@@ -10,6 +10,7 @@ type spec struct {
 	URL      string            `json:"url"`
 	Method   string            `json:"method"`
 	Headers  map[string]string `json:"headers"`
+	Payload  *string           `json:"payload"`
 	Tries    uint8             `json:"tries"`
 	Interval th.Duration       `json:"interval"`
 	Timeout  th.Duration       `json:"timeout"`

@@ -1,8 +1,10 @@
 package http_2xx
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"time"
 
@@ -25,6 +27,7 @@ type http_2xx struct {
 	url      string
 	method   string
 	headers  map[string]string
+	payload  []byte
 	tries    uint8
 	interval time.Duration
 }
@@ -38,11 +41,17 @@ func New(s spec) (checkers.Checker, error) {
 		return nil, err
 	}
 
+	var payload []byte = nil
+	if s.Payload != nil {
+		payload = []byte(*s.Payload)
+	}
+
 	return &http_2xx{
 		client:   client,
 		url:      s.URL,
 		method:   s.Method,
 		headers:  s.Headers,
+		payload:  payload,
 		tries:    s.Tries,
 		interval: s.Interval.TimeDuration(),
 	}, nil
@@ -92,7 +101,12 @@ func (h *http_2xx) Check(ctx context.Context) error {
 }
 
 func (h *http_2xx) check(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, h.method, h.url, nil)
+	var payloadReader io.Reader = nil
+	if h.payload != nil {
+		payloadReader = bytes.NewReader(h.payload)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, h.method, h.url, payloadReader)
 	if err != nil {
 		return err
 	}

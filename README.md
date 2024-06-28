@@ -81,6 +81,7 @@ services:
           method: GET
           headers:
             Host: example.com
+          payload: ping
           path: /
           tries: 3
           interval: 100ms

@@ -86,26 +86,29 @@ func (a *announcer) newPathList() ([]*api.Path, error) {
 			return nil, err
 		}
 
-		nlri, _ := apb.New(&api.IPAddressPrefix{
+		nlri, err := apb.New(&api.IPAddressPrefix{
 			Prefix:    l[0],
 			PrefixLen: uint32(prefixLen),
 		})
+		if err != nil {
+			return nil, err
+		}
 
-		a1, _ := apb.New(&api.OriginAttribute{
+		a1, err := apb.New(&api.OriginAttribute{
 			Origin: 0,
 		})
-		a2, _ := apb.New(&api.NextHopAttribute{
+		if err != nil {
+			return nil, err
+		}
+
+		a2, err := apb.New(&api.NextHopAttribute{
 			NextHop: a.nextHop,
 		})
-		a3, _ := apb.New(&api.AsPathAttribute{
-			Segments: []*api.AsSegment{
-				{
-					Type:    2,
-					Numbers: []uint32{a.localASN},
-				},
-			},
-		})
-		attrs := []*apb.Any{a1, a2, a3}
+		if err != nil {
+			return nil, err
+		}
+
+		attrs := []*apb.Any{a1, a2}
 
 		prefixes = append(prefixes, &api.Path{
 			Family: &api.Family{Afi: api.Family_AFI_IP, Safi: api.Family_SAFI_UNICAST},

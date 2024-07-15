@@ -9,7 +9,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/teran/anycastd/checkers"
+	"github.com/runityru/anycastd/checkers"
 )
 
 var (

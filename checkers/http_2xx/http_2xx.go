@@ -11,7 +11,7 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/teran/anycastd/checkers"
+	"github.com/runityru/anycastd/checkers"
 )
 
 var _ checkers.Checker = (*http_2xx)(nil)

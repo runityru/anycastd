@@ -10,7 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/teran/anycastd/checkers"
+	"github.com/runityru/anycastd/checkers"
 )
 
 var (

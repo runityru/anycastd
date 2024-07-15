@@ -1,4 +1,4 @@
-module github.com/teran/anycastd
+module github.com/runityru/anycastd
 
 go 1.22.3
 

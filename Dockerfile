@@ -1,7 +1,7 @@
 FROM alpine:3.20.0 AS certificates
 
 RUN apk add --update --no-cache \
-  ca-certificates=20240226-r0
+  ca-certificates=20240705-r0
 
 FROM scratch
 

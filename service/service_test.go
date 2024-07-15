@@ -9,8 +9,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/teran/anycastd/announcer"
-	"github.com/teran/anycastd/checkers"
+	"github.com/runityru/anycastd/announcer"
+	"github.com/runityru/anycastd/checkers"
 )
 
 func init() {

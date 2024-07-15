@@ -12,18 +12,18 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/teran/anycastd/announcer"
-	"github.com/teran/anycastd/checkers"
-	"github.com/teran/anycastd/config"
-	"github.com/teran/anycastd/service"
+	"github.com/runityru/anycastd/announcer"
+	"github.com/runityru/anycastd/checkers"
+	"github.com/runityru/anycastd/config"
+	"github.com/runityru/anycastd/service"
 
 	// checkers in build
-	_ "github.com/teran/anycastd/checkers/assigned_address"
-	_ "github.com/teran/anycastd/checkers/dns_lookup"
-	_ "github.com/teran/anycastd/checkers/http_2xx"
-	_ "github.com/teran/anycastd/checkers/icmp_ping"
-	_ "github.com/teran/anycastd/checkers/tftp_rrq"
-	_ "github.com/teran/anycastd/checkers/tls_certificate"
+	_ "github.com/runityru/anycastd/checkers/assigned_address"
+	_ "github.com/runityru/anycastd/checkers/dns_lookup"
+	_ "github.com/runityru/anycastd/checkers/http_2xx"
+	_ "github.com/runityru/anycastd/checkers/icmp_ping"
+	_ "github.com/runityru/anycastd/checkers/tftp_rrq"
+	_ "github.com/runityru/anycastd/checkers/tls_certificate"
 )
 
 var (

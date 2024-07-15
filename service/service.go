@@ -8,8 +8,8 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/teran/anycastd/announcer"
-	"github.com/teran/anycastd/checkers"
+	"github.com/runityru/anycastd/announcer"
+	"github.com/runityru/anycastd/checkers"
 )
 
 type Service interface {

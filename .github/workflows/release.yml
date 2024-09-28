@@ -28,7 +28,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22.x'
+          go-version: '1.23.x'
       - name: Install dependencies
         run: go mod download
       - name: Test with the Go CLI
@@ -56,7 +56,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22.x'
+          go-version: '1.23.x'
       - name: Install dependencies
         run: go mod download
       - name: Build & Publish release release

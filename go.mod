@@ -17,7 +17,7 @@ require (
 	github.com/teran/go-ptr v1.1.0
 	github.com/teran/go-time v0.0.2
 	golang.org/x/sync v0.8.0
-	google.golang.org/protobuf v1.34.2
+	google.golang.org/protobuf v1.35.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 

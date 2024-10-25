@@ -15,11 +15,21 @@ type Metrics interface {
 }
 
 type metrics struct {
+	appUpGauge           *prometheus.GaugeVec
 	upGauge              *prometheus.GaugeVec
 	checkDurationSeconds *prometheus.GaugeVec
 }
 
-func NewMetrics() (Metrics, error) {
+func NewMetrics(appVersion string) (Metrics, error) {
+	appUpGauge := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "anycastd",
+			Name:      "up",
+			Help:      "Application liveness status (must always be 1)",
+		},
+		[]string{"version"},
+	)
+
 	upGauge := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "anycastd",
@@ -38,15 +48,16 @@ func NewMetrics() (Metrics, error) {
 		[]string{"service", "check"},
 	)
 
-	if err := prometheus.Register(upGauge); err != nil {
-		return nil, err
+	for _, m := range []prometheus.Collector{appUpGauge, upGauge, checkDurationSeconds} {
+		if err := prometheus.Register(m); err != nil {
+			return nil, err
+		}
 	}
 
-	if err := prometheus.Register(checkDurationSeconds); err != nil {
-		return nil, err
-	}
+	appUpGauge.WithLabelValues(appVersion).Set(1)
 
 	return &metrics{
+		appUpGauge:           appUpGauge,
 		upGauge:              upGauge,
 		checkDurationSeconds: checkDurationSeconds,
 	}, nil

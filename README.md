@@ -143,6 +143,10 @@ systems to notify operators about any changes in their service.
 
 For now anycastd provides the following metrics:
 
+| Metric name | Labels  | Description                                    |
+|-------------|---------|------------------------------------------------|
+| anycastd_up | version | Application liveness status (must always be 1) |
+
 ### Service
 
 Service could provide their metrics in order to aggregate current statuses.

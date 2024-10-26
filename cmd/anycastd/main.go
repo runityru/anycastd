@@ -133,7 +133,7 @@ func main() {
 			LocalASN: cfg.Announcer.LocalASN,
 		})
 
-		metrics, err := service.NewMetrics()
+		metrics, err := service.NewMetrics(appVersion)
 		if err != nil {
 			panic(err)
 		}

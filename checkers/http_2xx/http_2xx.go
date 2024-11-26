@@ -111,6 +111,8 @@ func (h *http_2xx) check(ctx context.Context) error {
 		return err
 	}
 
+	req.Header.Set("User-Agent", "anycastd/1.0 (http_2xx checker)")
+
 	for k, v := range h.headers {
 		req.Header.Set(k, v)
 	}

@@ -21,7 +21,7 @@ import (
 
 var goDefaultHeaders = http.Header{
 	"Accept-Encoding": []string{"gzip"},
-	"User-Agent":      []string{"Go-http-client/1.1"},
+	"User-Agent":      []string{"anycastd/1.0 (http_2xx checker)"},
 }
 
 func init() {

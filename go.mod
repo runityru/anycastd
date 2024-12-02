@@ -7,7 +7,7 @@ toolchain go1.23.2
 require (
 	github.com/asaskevich/govalidator v0.0.0-20200108200545-475eaeb16496
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0
-	github.com/go-ping/ping v1.1.0
+	github.com/go-ping/ping v1.2.0
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/osrg/gobgp/v3 v3.31.0
 	github.com/pin/tftp v2.1.0+incompatible

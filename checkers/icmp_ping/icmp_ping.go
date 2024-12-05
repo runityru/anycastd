@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/go-ping/ping"
 	"github.com/pkg/errors"
+	ping "github.com/prometheus-community/pro-bing"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/runityru/anycastd/checkers"

@@ -35,7 +35,7 @@ type dns_lookup struct {
 const checkName = "dns_lookup"
 
 func init() {
-	checkers.Register(checkName, NewFromSpec)
+	checkers.MustRegister(checkName, NewFromSpec)
 }
 
 func New(s spec) (checkers.Checker, error) {

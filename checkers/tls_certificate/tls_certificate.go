@@ -29,7 +29,8 @@ var (
 const checkName = "tls_certificate"
 
 func init() {
-	checkers.Register(checkName, NewFromSpec)
+	checkers.MustRegister(checkName, NewFromSpec)
+
 	prometheus.MustRegister(certificateExpiresInSeconds)
 }
 

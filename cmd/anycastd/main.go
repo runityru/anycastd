@@ -81,7 +81,12 @@ func main() {
 	}); err != nil {
 		panic(err)
 	}
-	defer bgpSrv.StopBgp(ctx, &apipb.StopBgpRequest{})
+	defer func() {
+		err := bgpSrv.StopBgp(ctx, &apipb.StopBgpRequest{})
+		if err != nil {
+			log.Warnf("error stopping BGP session: %s", err)
+		}
+	}()
 
 	if err := bgpSrv.WatchEvent(context.Background(), &apipb.WatchEventRequest{
 		Peer: &apipb.WatchEventRequest_Peer{},
@@ -168,15 +173,4 @@ func main() {
 	if err := g.Wait(); err != nil {
 		panic(err)
 	}
-}
-
-func runGoBGPMetricsCollector(ctx context.Context, bgpSrv *server.BgpServer) error {
-	peers := []*apipb.Peer{}
-	err := bgpSrv.ListPeer(ctx, &apipb.ListPeerRequest{}, func(p *apipb.Peer) {
-		peers = append(peers, p)
-	})
-	if err != nil {
-		return err
-	}
-	return nil
 }

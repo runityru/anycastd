@@ -94,7 +94,7 @@ type pingStats struct {
 const checkName = "icmp_ping"
 
 func init() {
-	checkers.Register(checkName, NewFromSpec)
+	checkers.MustRegister(checkName, NewFromSpec)
 
 	prometheus.MustRegister(maxRttSeconds)
 	prometheus.MustRegister(minRttSeconds)

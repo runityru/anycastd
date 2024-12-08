@@ -76,7 +76,7 @@ func (m *metrics) MeasureCall(ctx context.Context, service, check string, fn fun
 
 	err := fn(ctx)
 
-	m.checkDurationSeconds.WithLabelValues(service, check).Set(time.Now().Sub(start).Seconds())
+	m.checkDurationSeconds.WithLabelValues(service, check).Set(time.Since(start).Seconds())
 
 	return err
 }

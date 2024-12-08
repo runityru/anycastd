@@ -11,7 +11,7 @@ import (
 )
 
 func httpRequestHandler(w http.ResponseWriter, req *http.Request) {
-	w.Write([]byte("Hello,World!\n"))
+	_, _ = w.Write([]byte("Hello,World!\n"))
 }
 
 func TestGetRemoteCertificate(t *testing.T) {

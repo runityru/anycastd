@@ -42,3 +42,9 @@ func Register(kind string, fn func(in json.RawMessage) (Checker, error)) error {
 
 	return nil
 }
+
+func MustRegister(kind string, fn func(in json.RawMessage) (Checker, error)) {
+	if err := Register(kind, fn); err != nil {
+		panic(err)
+	}
+}

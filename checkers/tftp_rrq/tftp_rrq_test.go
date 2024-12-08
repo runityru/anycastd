@@ -96,6 +96,8 @@ func TestCheck(t *testing.T) {
 				Port: 0,
 				Zone: "",
 			})
+			r.NoError(err)
+
 			defer l.Close()
 
 			s := tftp.NewServer(func(filename string, rf io.ReaderFrom) error {

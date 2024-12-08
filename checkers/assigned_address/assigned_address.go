@@ -23,7 +23,7 @@ type assigned_address struct {
 const checkName = "assigned_address"
 
 func init() {
-	checkers.Register(checkName, NewFromSpec)
+	checkers.MustRegister(checkName, NewFromSpec)
 }
 
 func New(s spec) (checkers.Checker, error) {

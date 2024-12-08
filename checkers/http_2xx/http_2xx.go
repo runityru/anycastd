@@ -19,7 +19,7 @@ var _ checkers.Checker = (*http_2xx)(nil)
 const checkName = "http_2xx"
 
 func init() {
-	checkers.Register(checkName, NewFromSpec)
+	checkers.MustRegister(checkName, NewFromSpec)
 }
 
 type http_2xx struct {

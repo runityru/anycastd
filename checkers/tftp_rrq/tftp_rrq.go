@@ -21,7 +21,7 @@ var _ checkers.Checker = (*tftp_rrq)(nil)
 const checkName = "tftp_rrq"
 
 func init() {
-	checkers.Register(checkName, NewFromSpec)
+	checkers.MustRegister(checkName, NewFromSpec)
 }
 
 type tftp_rrq struct {

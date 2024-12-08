@@ -44,10 +44,9 @@ type metrics struct {
 	bgpPeerPasswordSetFlag   *prometheus.GaugeVec
 	bgpPeerType              *prometheus.GaugeVec
 
-	bgpSrv    *server.BgpServer
-	routerID  string
-	asn       uint32
-	asnString string
+	bgpSrv   *server.BgpServer
+	routerID string
+	asn      uint32
 }
 
 func NewMetricsRepository(bgpSrv *server.BgpServer, routerID string, asn uint32) Metrics {

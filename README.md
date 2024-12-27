@@ -77,12 +77,11 @@ services:
           timeout: 3s
       - kind: http_2xx
         spec:
-          url: http://127.0.0.1:8080
+          url: http://127.0.0.1:8080/test-path
           method: GET
           headers:
             Host: example.com
           payload: ping
-          path: /
           tries: 3
           interval: 100ms
           timeout: 2s

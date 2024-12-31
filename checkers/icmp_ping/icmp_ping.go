@@ -151,7 +151,7 @@ func (p *icmp_ping) Kind() string {
 }
 
 func (p *icmp_ping) Check(ctx context.Context) error {
-	stats, err := runPing(p.host, p.tries, p.interval, p.timeout)
+	stats, err := p.pingerFn(p.host, p.tries, p.interval, p.timeout)
 	if err != nil {
 		return err
 	}

@@ -192,7 +192,7 @@ In addition some checkers could provide their own metrics the list of them is be
 | anycastd_check_packets_sent_total                | check, host | Total amount of packets sent               |
 | anycastd_check_std_dev_rtt_seconds               | check, host | Standard deviation RTT of ICMP checks      |
 
-#### ntpq check 
+#### ntpq check
 
 | Metric name                                      | Labels      | Description                                |
 |--------------------------------------------------|-------------|--------------------------------------------|

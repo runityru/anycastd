@@ -34,8 +34,8 @@ func (s *checkTestSuite) TestOffsetTooBig() {
 		ReferenceID: 1,
 	}, nil).Times(int(c.tries))
 
-	c.Check(context.Background())
-	s.Require().Error(ErrOffset)
+	err = c.Check(context.Background())
+	s.Require().Error(err)
 }
 
 func (s *checkTestSuite) TestOffset() {

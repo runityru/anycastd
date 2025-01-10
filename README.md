@@ -192,6 +192,14 @@ In addition some checkers could provide their own metrics the list of them is be
 | anycastd_check_packets_sent_total                | check, host | Total amount of packets sent               |
 | anycastd_check_std_dev_rtt_seconds               | check, host | Standard deviation RTT of ICMP checks      |
 
+#### ntpq check 
+
+| Metric name                                      | Labels      | Description                                |
+|--------------------------------------------------|-------------|--------------------------------------------|
+| anycastd_check_last_ntp_offset_ms                | check, host | The estimated offset of the local system clock relative to the server's clock                     |
+| anycastd_check_last_ntp_rtt_ms                   | check, host | An estimate of the round-trip-time delay between the client and the server                        |
+| anycastd_check_ntp_packets_sent_total            | check, host | Total amount of ntp packets sent                                                                  |
+
 ### GoBGP
 
 The core of anycastd for BGP communication is GoBGP which allows so gather

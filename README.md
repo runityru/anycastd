@@ -112,6 +112,14 @@ services:
           tries: 3
           interval: 100ms
           timeout: 5s
+      - kind: ntpq
+        spec:
+          server: 0.ru.pool.ntp.org
+          src_addr: 192.168.0.1
+          tries: 3
+          offset_threshold: 125ms
+          interval: 100ms
+          timeout: 5s
 metrics:
   enabled: true
   address: 127.0.0.1:9090
@@ -132,6 +140,7 @@ For now the following checks are available:
 * http_2xx - performs HTTP check and expects 2xx code
 * icmp_ping - performs ICMP ping to the specified host
 * tftp_rrq - performs TFTP GET request to specified URL
+* ntpq - performs NTP query to specific ntp server from specific src addr, checking offset 
 * tls_certificate - performs TLS certificate validation & provide expiration
     date via metrics
 

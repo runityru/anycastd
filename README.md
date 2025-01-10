@@ -112,6 +112,14 @@ services:
           tries: 3
           interval: 100ms
           timeout: 5s
+      - kind: ntpq
+        spec:
+          server: 0.ru.pool.ntp.org
+          src_addr: 192.168.0.1
+          tries: 3
+          offset_threshold: 125ms
+          interval: 100ms
+          timeout: 5s
 metrics:
   enabled: true
   address: 127.0.0.1:9090
@@ -132,6 +140,7 @@ For now the following checks are available:
 * http_2xx - performs HTTP check and expects 2xx code
 * icmp_ping - performs ICMP ping to the specified host
 * tftp_rrq - performs TFTP GET request to specified URL
+* ntpq - performs NTP query to ntp server from specific addr, checking offset
 * tls_certificate - performs TLS certificate validation & provide expiration
     date via metrics
 
@@ -182,6 +191,14 @@ In addition some checkers could provide their own metrics the list of them is be
 | anycastd_check_packets_received_total            | check, host | Total amount of packets received           |
 | anycastd_check_packets_sent_total                | check, host | Total amount of packets sent               |
 | anycastd_check_std_dev_rtt_seconds               | check, host | Standard deviation RTT of ICMP checks      |
+
+#### ntpq check
+
+| Metric name                                      | Labels      | Description                                |
+|--------------------------------------------------|-------------|--------------------------------------------|
+| anycastd_check_last_ntp_offset_ms                | check, host | The estimated offset of the local system clock relative to the server's clock                     |
+| anycastd_check_last_ntp_rtt_ms                   | check, host | An estimate of the round-trip-time delay between the client and the server                        |
+| anycastd_check_ntp_packets_sent_total            | check, host | Total amount of ntp packets sent                                                                  |
 
 ### GoBGP
 

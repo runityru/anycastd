@@ -22,6 +22,7 @@ import (
 	_ "github.com/runityru/anycastd/checkers/dns_lookup"
 	_ "github.com/runityru/anycastd/checkers/http_2xx"
 	_ "github.com/runityru/anycastd/checkers/icmp_ping"
+	_ "github.com/runityru/anycastd/checkers/ntpq"
 	_ "github.com/runityru/anycastd/checkers/tftp_rrq"
 	_ "github.com/runityru/anycastd/checkers/tls_certificate"
 )

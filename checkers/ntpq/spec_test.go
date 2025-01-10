@@ -38,7 +38,7 @@ func TestSpecValidation(t *testing.T) {
 				Interval:        th.Duration(1 * time.Second),
 				Timeout:         th.Duration(5 * time.Second),
 			},
-			expError: errors.New("server: must be a valid host."),
+			expError: errors.New("server: must be a valid IP address or DNS name."),
 		},
 		{
 			name: "invalid threshold",
@@ -49,13 +49,13 @@ func TestSpecValidation(t *testing.T) {
 				Interval: th.Duration(1 * time.Second),
 				Timeout:  th.Duration(5 * time.Second),
 			},
-			expError: errors.New("threshold must be set"),
+			expError: errors.New("offset_threshold: cannot be blank."),
 		},
 		{
 			name: "empty spec",
 			in:   spec{},
 			expError: errors.New(
-				"server: cannot be blank; src_addr: cannot be blank; offseth_threshold: cannot be blank; timeout: cannot be blank; tries: cannot be blank.",
+				"interval: cannot be blank; offset_threshold: cannot be blank; server: cannot be blank; src_addr: cannot be blank; timeout: cannot be blank; tries: cannot be blank.",
 			),
 		},
 	}

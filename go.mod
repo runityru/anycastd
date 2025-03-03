@@ -9,7 +9,7 @@ require (
 	github.com/beevik/ntp v1.4.3
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0
 	github.com/kelseyhightower/envconfig v1.4.0
-	github.com/osrg/gobgp/v3 v3.34.0
+	github.com/osrg/gobgp/v3 v3.35.0
 	github.com/pin/tftp v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus-community/pro-bing v0.6.1

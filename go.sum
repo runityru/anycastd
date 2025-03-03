@@ -55,8 +55,8 @@ github.com/mitchellh/mapstructure v1.5.0 h1:jeMsZIYE/09sWLaz43PL7Gy6RuMjD2eJVyua
 github.com/mitchellh/mapstructure v1.5.0/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq1c1nUAm88MOHcQC9l5mIlSMApZMrHA=
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
-github.com/osrg/gobgp/v3 v3.34.0 h1:DDIWsAIE7j1dwhSV3tGsTKs9OO8MTOS4atErebZxTtA=
-github.com/osrg/gobgp/v3 v3.34.0/go.mod h1:l2nPaHaLmIoKbFxMUzKon/h6c9BTzCp5zJI9Dhnrx5c=
+github.com/osrg/gobgp/v3 v3.35.0 h1:8HQyCCoByAJyXiSzTFBl77wuOyVdDXozPdXX+tjYyHQ=
+github.com/osrg/gobgp/v3 v3.35.0/go.mod h1:l2nPaHaLmIoKbFxMUzKon/h6c9BTzCp5zJI9Dhnrx5c=
 github.com/pelletier/go-toml/v2 v2.2.3 h1:YmeHyLY8mFWbdkNWwpr+qIL2bEqT0o95WSdkNHvL12M=
 github.com/pelletier/go-toml/v2 v2.2.3/go.mod h1:MfCQTFTvCcUyyvvwm1+G6H/jORL20Xlb6rzQu9GuUkc=
 github.com/pin/tftp v2.1.0+incompatible h1:Yng4J7jv6lOc6IF4XoB5mnd3P7ZrF60XQq+my3FAMus=

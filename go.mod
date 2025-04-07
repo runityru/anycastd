@@ -9,7 +9,7 @@ require (
 	github.com/beevik/ntp v1.4.3
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0
 	github.com/kelseyhightower/envconfig v1.4.0
-	github.com/osrg/gobgp/v3 v3.35.0
+	github.com/osrg/gobgp/v3 v3.36.0
 	github.com/pin/tftp v2.1.0+incompatible
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus-community/pro-bing v0.6.1
@@ -56,9 +56,9 @@ require (
 	github.com/vishvananda/netns v0.0.5 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67 // indirect
-	golang.org/x/net v0.36.0 // indirect
-	golang.org/x/sys v0.30.0 // indirect
-	golang.org/x/text v0.22.0 // indirect
+	golang.org/x/net v0.37.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241230172942-26aa7a208def // indirect
 	google.golang.org/grpc v1.69.2 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect

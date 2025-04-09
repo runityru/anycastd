@@ -220,7 +220,7 @@ func (m *handlerMock) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			panic(err)
 		}
-		defer r.Body.Close()
+		defer func() { _ = r.Body.Close() }()
 	}
 
 	args := m.Called(r.Method, r.Host, r.Header, r.URL.Path, payload)

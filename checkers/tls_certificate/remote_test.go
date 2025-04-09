@@ -35,7 +35,7 @@ func TestGetRemoteCertificate(t *testing.T) {
 			Handler:   http.HandlerFunc(httpRequestHandler),
 			TLSConfig: tlsConfig,
 		}
-		defer server.Close()
+		defer func() { _ = server.Close() }()
 
 		if err := server.ServeTLS(l, "", ""); err != nil {
 			panic(err)

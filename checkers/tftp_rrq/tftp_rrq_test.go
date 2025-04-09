@@ -98,7 +98,7 @@ func TestCheck(t *testing.T) {
 			})
 			r.NoError(err)
 
-			defer l.Close()
+			defer func() { _ = l.Close() }()
 
 			s := tftp.NewServer(func(filename string, rf io.ReaderFrom) error {
 				buf := bytes.NewBuffer([]byte("test data"))

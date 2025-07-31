@@ -56,9 +56,11 @@ func (c Check) Validate() error {
 }
 
 type Peer struct {
-	Name          string `json:"name"`
-	RemoteAddress string `json:"remote_address"`
-	RemoteASN     uint32 `json:"remote_asn"`
+	Name           string `json:"name"`
+	RemoteAddress  string `json:"remote_address"`
+	RemoteASN      uint32 `json:"remote_asn"`
+	EnableMultihop bool   `json:"enable_multihop"`
+	MultihopTTL    uint32 `json:"multihop_ttl"`
 }
 
 func (p Peer) Validate() error {
@@ -66,6 +68,7 @@ func (p Peer) Validate() error {
 		validation.Field(&p.Name, validation.Required),
 		validation.Field(&p.RemoteAddress, validation.Required, is.IPv4),
 		validation.Field(&p.RemoteASN, validation.Required),
+		validation.Field(&p.MultihopTTL, validation.When(p.EnableMultihop, validation.Min(uint32(1)))),
 	)
 }
 

@@ -106,6 +106,10 @@ func main() {
 					NeighborAddress: peer.RemoteAddress,
 					PeerAsn:         peer.RemoteASN,
 				},
+				EbgpMultihop: &apipb.EbgpMultihop{
+					Enabled:     peer.EnableMultihop,
+					MultihopTtl: peer.MultihopTTL,
+				},
 			},
 		})
 		if err != nil {

@@ -12,6 +12,8 @@ announcer:
     - name: some_router_2
       remote_address: 10.0.0.253
       remote_asn: 65000
+      enable_multihop: true
+      multihop_ttl: 2
 services:
   - name: http
     check_interval: 10s

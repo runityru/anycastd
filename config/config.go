@@ -68,6 +68,7 @@ func (p Peer) Validate() error {
 		validation.Field(&p.Name, validation.Required),
 		validation.Field(&p.RemoteAddress, validation.Required, is.IPv4),
 		validation.Field(&p.RemoteASN, validation.Required),
+		validation.Field(&p.MultihopTTL, validation.When(p.EnableMultihop, validation.Min(uint32(1)))),
 	)
 }
 

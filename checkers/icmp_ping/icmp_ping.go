@@ -165,6 +165,14 @@ func (p *icmp_ping) Check(ctx context.Context) error {
 	avgRttSeconds.WithLabelValues(checkName, p.host).Set(stats.AvgRTT.Seconds())
 	stdDevRtt.WithLabelValues(checkName, p.host).Set(stats.StdDevRTT.Seconds())
 
+	if stats.PacketsRecv != stats.PacketsSent {
+		return errors.Errorf("expected %d packets, got %d", stats.PacketsSent, stats.PacketsRecv)
+	}
+
+	if stats.PacketLoss > 0 {
+		return errors.Errorf("expected 0 packet loss, got %f", stats.PacketLoss)
+	}
+
 	return nil
 }
 

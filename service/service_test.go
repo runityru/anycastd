@@ -26,7 +26,7 @@ func (s *serviceTestSuite) TestRunPass() {
 	s.metricsM.On("ServiceUp", "test_service").Return().Once()
 	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Once()
 
-	svc := New("test_service", s.announcerM, []checkers.Checker{s.checkM}, 1*time.Second, s.metricsM).(*service)
+	svc := New("test_service", s.announcerM, []checkers.Checker{s.checkM}, 1*time.Second, s.metricsM, false).(*service)
 
 	err := svc.run(s.ctx)
 	s.Require().NoError(err)
@@ -39,7 +39,7 @@ func (s *serviceTestSuite) TestRunFail() {
 	s.metricsM.On("ServiceDown", "test_service").Return().Once()
 	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Once()
 
-	svc := New("test_service", s.announcerM, []checkers.Checker{s.checkM}, 1*time.Second, s.metricsM).(*service)
+	svc := New("test_service", s.announcerM, []checkers.Checker{s.checkM}, 1*time.Second, s.metricsM, false).(*service)
 
 	err := svc.run(s.ctx)
 	s.Require().NoError(err)
@@ -62,7 +62,7 @@ func (s *serviceTestSuite) TestRunPassThenFailThenPass() {
 	mCall5 := s.metricsM.On("MeasureCall", "test_service", "test_check").Return().NotBefore(mCall4).Once()
 	s.metricsM.On("ServiceUp", "test_service").Return().NotBefore(mCall5).Once()
 
-	svc := New("test_service", s.announcerM, []checkers.Checker{s.checkM}, 1*time.Second, s.metricsM).(*service)
+	svc := New("test_service", s.announcerM, []checkers.Checker{s.checkM}, 1*time.Second, s.metricsM, false).(*service)
 
 	for i := 0; i < 3; i++ {
 		err := svc.run(s.ctx)

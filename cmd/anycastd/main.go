@@ -148,7 +148,7 @@ func main() {
 			panic(err)
 		}
 
-		svc := service.New(svcCfg.Name, a, checks, svcCfg.CheckInterval.TimeDuration(), metrics)
+		svc := service.New(svcCfg.Name, a, checks, svcCfg.CheckInterval.TimeDuration(), metrics, svcCfg.AllFail)
 
 		g.Go(func() error {
 			return svc.Run(ctx)

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -27,6 +28,62 @@ type service struct {
 	announced *atomic.Bool
 }
 
+type serviceStates struct {
+	servicesUp  map[string]bool
+	initialized map[string]bool
+	mu          sync.Mutex
+}
+
+func newServiceStates() *serviceStates {
+	return &serviceStates{
+		servicesUp:  make(map[string]bool),
+		initialized: make(map[string]bool),
+	}
+}
+
+func (ss *serviceStates) RegisterService(serviceName string) {
+	ss.servicesUp[serviceName] = false
+	ss.initialized[serviceName] = false
+}
+
+func (ss *serviceStates) SaveServiceState(ctx context.Context, s *service, state bool) {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+
+	ss.servicesUp[s.name] = state
+	ss.initialized[s.name] = true
+
+	announcerUp := true
+
+	for serviceName, state := range ss.servicesUp {
+		if !state {
+			announcerUp = false
+		}
+		if !ss.initialized[serviceName] {
+			return
+		}
+	}
+
+	if !announcerUp {
+		if s.announced.Load() {
+			if err := s.announcer.Denounce(ctx); err != nil {
+				log.Warnf("denounce failed: %s", err)
+			}
+			s.announced.Store(false)
+		}
+	} else {
+		if !s.announced.Load() {
+			if err := s.announcer.Announce(ctx); err != nil {
+				log.Warnf("announce failed: %s", err)
+			}
+		}
+
+		s.announced.Store(true)
+	}
+}
+
+var serviceStatesContainer *serviceStates
+
 func New(
 	name string,
 	a announcer.Announcer,
@@ -35,6 +92,10 @@ func New(
 	metrics Metrics,
 	allFail bool,
 ) Service {
+	if serviceStatesContainer == nil {
+		serviceStatesContainer = newServiceStates()
+	}
+	serviceStatesContainer.RegisterService(name)
 	return &service{
 		name:      name,
 		announcer: a,
@@ -79,26 +140,10 @@ func (s *service) run(ctx context.Context) error {
 
 	if serviceDown {
 		s.metrics.ServiceDown(s.name)
-
-		if s.announced.Load() {
-			if err := s.announcer.Denounce(ctx); err != nil {
-				log.Warnf("denounce failed: %s", err)
-				return nil
-			}
-			s.announced.Store(false)
-		}
 	} else {
 		s.metrics.ServiceUp(s.name)
-
-		if !s.announced.Load() {
-			if err := s.announcer.Announce(ctx); err != nil {
-				log.Warnf("announce failed: %s", err)
-				return nil
-			}
-		}
-
-		s.announced.Store(true)
 	}
+	serviceStatesContainer.SaveServiceState(ctx, s, !serviceDown)
 
 	return nil
 }

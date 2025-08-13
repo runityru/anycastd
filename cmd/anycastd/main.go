@@ -117,6 +117,11 @@ func main() {
 		}
 	}
 
+	metrics, err := service.NewMetrics(appVersion)
+	if err != nil {
+		panic(err)
+	}
+
 	log.Info("Starting service initialization ...")
 	for _, svcCfg := range cfg.Services {
 		log.Tracef("Initializing service %s ...", svcCfg.Name)
@@ -142,11 +147,6 @@ func main() {
 			NextHop:  cfg.Announcer.LocalAddress,
 			LocalASN: cfg.Announcer.LocalASN,
 		})
-
-		metrics, err := service.NewMetrics(appVersion)
-		if err != nil {
-			panic(err)
-		}
 
 		svc := service.New(svcCfg.Name, a, checks, svcCfg.CheckInterval.TimeDuration(), metrics, svcCfg.AllFail)
 

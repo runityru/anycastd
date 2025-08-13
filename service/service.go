@@ -42,6 +42,9 @@ func newServiceStates() *serviceStates {
 }
 
 func (ss *serviceStates) RegisterService(serviceName string) {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+
 	ss.servicesUp[serviceName] = false
 	ss.initialized[serviceName] = false
 }

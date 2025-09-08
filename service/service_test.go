@@ -7,6 +7,7 @@ import (
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/runityru/anycastd/announcer"
@@ -96,4 +97,23 @@ func (s *serviceTestSuite) TearDownTest() {
 
 func TestServiceTestSuite(t *testing.T) {
 	suite.Run(t, &serviceTestSuite{})
+}
+
+func TestServiceStates(t *testing.T) {
+	serviceStates := newServiceStates()
+	services := []string{"http", "dns"}
+
+	for _, service := range services {
+		serviceStates.RegisterService(service)
+	}
+
+	serviceStates.SaveServiceState("http", false)
+
+	assert.Equal(t, serviceStates.AnyDown(), false, "only http state is initialized")
+
+	serviceStates.SaveServiceState("dns", true)
+	assert.Equal(t, serviceStates.AnyDown(), true, "dns is down")
+
+	serviceStates.SaveServiceState("http", true)
+	assert.Equal(t, serviceStates.AnyDown(), false, "all up")
 }

@@ -49,40 +49,27 @@ func (ss *serviceStates) RegisterService(serviceName string) {
 	ss.initialized[serviceName] = false
 }
 
-func (ss *serviceStates) SaveServiceState(ctx context.Context, s *service, state bool) {
+func (ss *serviceStates) SaveServiceState(serviceName string, state bool) {
 	ss.mu.Lock()
 	defer ss.mu.Unlock()
 
-	ss.servicesUp[s.name] = state
-	ss.initialized[s.name] = true
+	ss.servicesUp[serviceName] = state
+	ss.initialized[serviceName] = true
+}
 
-	announcerUp := true
+func (ss *serviceStates) AnyDown() bool {
+	announcerDown := false
 
 	for serviceName, state := range ss.servicesUp {
 		if !state {
-			announcerUp = false
+			announcerDown = true
 		}
 		if !ss.initialized[serviceName] {
-			return
+			return false
 		}
 	}
 
-	if !announcerUp {
-		if s.announced.Load() {
-			if err := s.announcer.Denounce(ctx); err != nil {
-				log.Warnf("denounce failed: %s", err)
-			}
-			s.announced.Store(false)
-		}
-	} else {
-		if !s.announced.Load() {
-			if err := s.announcer.Announce(ctx); err != nil {
-				log.Warnf("announce failed: %s", err)
-			}
-		}
-
-		s.announced.Store(true)
-	}
+	return announcerDown
 }
 
 var serviceStatesContainer *serviceStates
@@ -146,7 +133,24 @@ func (s *service) run(ctx context.Context) error {
 	} else {
 		s.metrics.ServiceUp(s.name)
 	}
-	serviceStatesContainer.SaveServiceState(ctx, s, !serviceDown)
+	serviceStatesContainer.SaveServiceState(s.name, !serviceDown)
+
+	if serviceStatesContainer.AnyDown() {
+		if s.announced.Load() {
+			if err := s.announcer.Denounce(ctx); err != nil {
+				log.Warnf("denounce failed: %s", err)
+			}
+			s.announced.Store(false)
+		}
+	} else {
+		if !s.announced.Load() {
+			if err := s.announcer.Announce(ctx); err != nil {
+				log.Warnf("announce failed: %s", err)
+			}
+		}
+
+		s.announced.Store(true)
+	}
 
 	return nil
 }

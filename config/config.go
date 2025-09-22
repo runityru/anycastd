@@ -75,6 +75,7 @@ func (p Peer) Validate() error {
 type Service struct {
 	Name          string      `json:"name"`
 	CheckInterval th.Duration `json:"check_interval"`
+	AllFail       bool        `json:"all_fail"`
 	Checks        []Check     `json:"checks"`
 }
 

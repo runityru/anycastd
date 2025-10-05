@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -17,82 +16,37 @@ type Service interface {
 	Run(ctx context.Context) error
 }
 
+type Checker struct {
+	Check checkers.Checker
+	Group string
+}
+
 type service struct {
 	name      string
 	announcer announcer.Announcer
-	checks    []checkers.Checker
+	checks    []Checker
 	interval  time.Duration
 	metrics   Metrics
-	allFail   bool
+	strategy  Strategy
 
 	announced *atomic.Bool
 }
 
-type serviceStates struct {
-	servicesUp  map[string]bool
-	initialized map[string]bool
-	mu          sync.Mutex
-}
-
-func newServiceStates() *serviceStates {
-	return &serviceStates{
-		servicesUp:  make(map[string]bool),
-		initialized: make(map[string]bool),
-	}
-}
-
-func (ss *serviceStates) RegisterService(serviceName string) {
-	ss.mu.Lock()
-	defer ss.mu.Unlock()
-
-	ss.servicesUp[serviceName] = false
-	ss.initialized[serviceName] = false
-}
-
-func (ss *serviceStates) SaveServiceState(serviceName string, state bool) {
-	ss.mu.Lock()
-	defer ss.mu.Unlock()
-
-	ss.servicesUp[serviceName] = state
-	ss.initialized[serviceName] = true
-}
-
-func (ss *serviceStates) AnyDown() bool {
-	announcerDown := false
-
-	for serviceName, state := range ss.servicesUp {
-		if !state {
-			announcerDown = true
-		}
-		if !ss.initialized[serviceName] {
-			return false
-		}
-	}
-
-	return announcerDown
-}
-
-var serviceStatesContainer *serviceStates
-
 func New(
 	name string,
 	a announcer.Announcer,
-	checks []checkers.Checker,
+	checks []Checker,
 	interval time.Duration,
 	metrics Metrics,
-	allFail bool,
+	strategy Strategy,
 ) Service {
-	if serviceStatesContainer == nil {
-		serviceStatesContainer = newServiceStates()
-	}
-	serviceStatesContainer.RegisterService(name)
 	return &service{
 		name:      name,
 		announcer: a,
 		checks:    checks,
 		interval:  interval,
 		metrics:   metrics,
-		allFail:   allFail,
+		strategy:  strategy,
 		announced: &atomic.Bool{},
 	}
 }
@@ -111,21 +65,19 @@ func (s *service) Run(ctx context.Context) error {
 }
 
 func (s *service) run(ctx context.Context) error {
-	serviceDown := false
-	failedChecks := 0
+	checkResults := []CheckResult{}
 	for _, check := range s.checks {
-		if err := s.metrics.MeasureCall(ctx, s.name, check.Kind(), check.Check); err != nil {
+		result := true
+		if err := s.metrics.MeasureCall(ctx, s.name, check.Check.Kind(), check.Check.Check); err != nil {
 			log.Warnf("check failed: %s", err)
-			if !s.allFail {
-				serviceDown = true
-				break
-			}
-			failedChecks += 1
+			result = false
 		}
+		checkResults = append(checkResults, CheckResult{check, result})
 	}
 
-	if s.allFail && failedChecks == len(s.checks) {
-		serviceDown = true
+	serviceDown, err := s.strategy(checkResults)
+	if err != nil {
+		return err
 	}
 
 	if serviceDown {
@@ -133,9 +85,8 @@ func (s *service) run(ctx context.Context) error {
 	} else {
 		s.metrics.ServiceUp(s.name)
 	}
-	serviceStatesContainer.SaveServiceState(s.name, !serviceDown)
 
-	if serviceStatesContainer.AnyDown() {
+	if serviceDown {
 		if s.announced.Load() {
 			if err := s.announcer.Denounce(ctx); err != nil {
 				log.Warnf("denounce failed: %s", err)

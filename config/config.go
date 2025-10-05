@@ -44,8 +44,9 @@ func (a Announcer) Validate() error {
 }
 
 type Check struct {
-	Kind string          `json:"kind"`
-	Spec json.RawMessage `json:"spec"`
+	Kind  string          `json:"kind"`
+	Spec  json.RawMessage `json:"spec"`
+	Group string          `json:"group"`
 }
 
 func (c Check) Validate() error {
@@ -73,10 +74,11 @@ func (p Peer) Validate() error {
 }
 
 type Service struct {
-	Name          string      `json:"name"`
-	CheckInterval th.Duration `json:"check_interval"`
-	AllFail       bool        `json:"all_fail"`
-	Checks        []Check     `json:"checks"`
+	Name            string          `json:"name"`
+	CheckInterval   th.Duration     `json:"check_interval"`
+	Strategy        string          `json:"strategy"`
+	StrategyOptions json.RawMessage `json:"strategy_options"`
+	Checks          []Check         `json:"checks"`
 }
 
 func (s Service) Validate() error {

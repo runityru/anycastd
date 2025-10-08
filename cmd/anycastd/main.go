@@ -138,7 +138,7 @@ func main() {
 				panic(err)
 			}
 
-			checks = append(checks, service.Checker{c, check.Group})
+			checks = append(checks, service.Checker{Check: c, Group: check.Group})
 		}
 
 		a := announcer.New(announcer.Config{

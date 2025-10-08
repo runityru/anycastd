@@ -117,11 +117,16 @@ func main() {
 		}
 	}
 
+	metrics, err := service.NewMetrics(appVersion)
+	if err != nil {
+		panic(err)
+	}
+
 	log.Info("Starting service initialization ...")
 	for _, svcCfg := range cfg.Services {
 		log.Tracef("Initializing service %s ...", svcCfg.Name)
 
-		checks := []checkers.Checker{}
+		checks := []service.Checker{}
 		for _, check := range svcCfg.Checks {
 			log.WithFields(log.Fields{
 				"service": svcCfg.Name,
@@ -133,7 +138,7 @@ func main() {
 				panic(err)
 			}
 
-			checks = append(checks, c)
+			checks = append(checks, service.Checker{Check: c, Group: check.Group})
 		}
 
 		a := announcer.New(announcer.Config{
@@ -143,12 +148,12 @@ func main() {
 			LocalASN: cfg.Announcer.LocalASN,
 		})
 
-		metrics, err := service.NewMetrics(appVersion)
+		strategy, err := service.GetStrategy(svcCfg.Strategy, svcCfg.StrategyOptions)
 		if err != nil {
 			panic(err)
 		}
 
-		svc := service.New(svcCfg.Name, a, checks, svcCfg.CheckInterval.TimeDuration(), metrics)
+		svc := service.New(svcCfg.Name, a, checks, svcCfg.CheckInterval.TimeDuration(), metrics, strategy)
 
 		g.Go(func() error {
 			return svc.Run(ctx)

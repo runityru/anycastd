@@ -105,7 +105,11 @@ func (s *tls_certificate) Check(ctx context.Context) error {
 	if len(certs) < 1 {
 		return errors.New("empty certificate list received")
 	}
-	crt := certs[len(certs)-1]
+
+	crt, err := getServerCertificate(certs)
+	if err != nil {
+		return errors.Wrap(err, "error getting server certificate")
+	}
 
 	ttl := int(time.Since(crt.NotAfter).Seconds())
 
@@ -160,4 +164,13 @@ func (s *tls_certificate) Check(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func getServerCertificate(certs []*x509.Certificate) (*x509.Certificate, error) {
+	for _, cert := range certs {
+		if !cert.IsCA {
+			return cert, nil
+		}
+	}
+	return nil, errors.New("no server certificate found")
 }

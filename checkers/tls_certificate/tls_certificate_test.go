@@ -86,7 +86,7 @@ func TestTLSCertificateLocal(t *testing.T) {
 			},
 			expError: errors.Errorf(
 				"Certificate is expired %d seconds ago",
-				int64(time.Since(time.Date(2025, 11, 28, 16, 43, 7, 0, time.UTC)).Seconds()),
+				int64(time.Since(time.Date(2025, 11, 28, 9, 41, 9, 0, time.UTC)).Seconds()),
 			),
 		},
 	}

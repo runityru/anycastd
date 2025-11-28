@@ -33,15 +33,15 @@ variable. So configuration is divided into two ways:
 
 anycastd allows to set the following options via environment variables:
 
-* `CONFIG_PATH` (string, default: `/config.yaml`) - path to the configuration file
-* `LOG_LEVEL` (ENUM, default: `WARN`) - logging verbosity level, could one of the:
-  * `TRACE`
-  * `DEBUG`
-  * `INFO`
-  * `WARNING`
-  * `ERROR`
-  * `FATAL`
-  * `PANIC`
+- `CONFIG_PATH` (string, default: `/config.yaml`) - path to the configuration file
+- `LOG_LEVEL` (ENUM, default: `WARN`) - logging verbosity level, could one of the:
+  - `TRACE`
+  - `DEBUG`
+  - `INFO`
+  - `WARNING`
+  - `ERROR`
+  - `FATAL`
+  - `PANIC`
 
 ### Configuration file
 
@@ -125,7 +125,6 @@ services:
 metrics:
   enabled: true
   address: 127.0.0.1:9090
-
 ```
 
 ## Available checks
@@ -137,14 +136,14 @@ which is a preferable way. That's why there's no exec command check ;)
 
 For now the following checks are available:
 
-* assigned_address - ensures the address is assigned on interface
-* dns_lookup - performs DNS lookup
-* http_2xx - performs HTTP check and expects 2xx code
-* icmp_ping - performs ICMP ping to the specified host
-* tftp_rrq - performs TFTP GET request to specified URL
-* ntpq - performs NTP query to ntp server from specific addr, checking offset
-* tls_certificate - performs TLS certificate validation & provide expiration
-    date via metrics
+- assigned_address - ensures the address is assigned on interface
+- dns_lookup - performs DNS lookup
+- http_2xx - performs HTTP check and expects 2xx code
+- icmp_ping - performs ICMP ping to the specified host
+- tftp_rrq - performs TFTP GET request to specified URL
+- ntpq - performs NTP query to ntp server from specific addr, checking offset
+- tls_certificate - performs TLS certificate validation & provide expiration
+  date via metrics
 
 ## Metrics
 
@@ -154,7 +153,7 @@ systems to notify operators about any changes in their service.
 For now anycastd provides the following metrics:
 
 | Metric name | Labels  | Description                                    |
-|-------------|---------|------------------------------------------------|
+| ----------- | ------- | ---------------------------------------------- |
 | anycastd_up | version | Application liveness status (must always be 1) |
 
 ### Service
@@ -162,7 +161,7 @@ For now anycastd provides the following metrics:
 Service could provide their metrics in order to aggregate current statuses.
 
 | Metric name         | Labels         | Description                             |
-|---------------------|----------------|-----------------------------------------|
+| ------------------- | -------------- | --------------------------------------- |
 | anycastd_service_up | service, check | Service liveness status based on checks |
 
 ### Checks
@@ -170,7 +169,7 @@ Service could provide their metrics in order to aggregate current statuses.
 Check running engine provides the following metrics.
 
 | Metric name                     | Labels         | Description                            |
-|---------------------------------|----------------|----------------------------------------|
+| ------------------------------- | -------------- | -------------------------------------- |
 | anycastd_check_duration_seconds | service, check | Duration of check execution in seconds |
 
 In addition some checkers could provide their own metrics the list of them is bellow:
@@ -178,13 +177,13 @@ In addition some checkers could provide their own metrics the list of them is be
 #### tls_certificate check
 
 | Metric name                    | Labels      | Description                                  |
-|--------------------------------|-------------|----------------------------------------------|
+| ------------------------------ | ----------- | -------------------------------------------- |
 | certificate_expires_in_seconds | check, path | Time the certificate expires in (in seconds) |
 
 #### icmp_ping check
 
 | Metric name                                      | Labels      | Description                                |
-|--------------------------------------------------|-------------|--------------------------------------------|
+| ------------------------------------------------ | ----------- | ------------------------------------------ |
 | anycastd_check_avg_rtt_seconds                   | check, host | Avg RTT of ICMP checks                     |
 | anycastd_check_loss_percent                      | check, host | Percent of packet loss                     |
 | anycastd_check_max_rtt_seconds                   | check, host | Max RTT of ICMP checks                     |
@@ -196,11 +195,11 @@ In addition some checkers could provide their own metrics the list of them is be
 
 #### ntpq check
 
-| Metric name                                      | Labels      | Description                                |
-|--------------------------------------------------|-------------|--------------------------------------------|
-| anycastd_check_last_ntp_offset_ms                | check, host | The estimated offset of the local system clock relative to the server's clock                     |
-| anycastd_check_last_ntp_rtt_ms                   | check, host | An estimate of the round-trip-time delay between the client and the server                        |
-| anycastd_check_ntp_packets_sent_total            | check, host | Total amount of ntp packets sent                                                                  |
+| Metric name                           | Labels      | Description                                                                   |
+| ------------------------------------- | ----------- | ----------------------------------------------------------------------------- |
+| anycastd_check_last_ntp_offset_ms     | check, host | The estimated offset of the local system clock relative to the server's clock |
+| anycastd_check_last_ntp_rtt_ms        | check, host | An estimate of the round-trip-time delay between the client and the server    |
+| anycastd_check_ntp_packets_sent_total | check, host | Total amount of ntp packets sent                                              |
 
 ### GoBGP
 
@@ -208,7 +207,7 @@ The core of anycastd for BGP communication is GoBGP which allows so gather
 some details about peers, sessions and announces.
 
 | Metric name                                      | Labels          | Description                                                                                         |
-|--------------------------------------------------|-----------------|-----------------------------------------------------------------------------------------------------|
+| ------------------------------------------------ | --------------- | --------------------------------------------------------------------------------------------------- |
 | anycastd_gobgp_peer_admin_state                  | router_id, peer | Peer state 0=up, 1=down, 2=pfx_ct                                                                   |
 | anycastd_gobgp_peer_count                        | router_id       | Total amount of peers configured for the GoBGP instance                                             |
 | anycastd_gobgp_peer_flops_count                  | router_id, peer | Peer flops count                                                                                    |

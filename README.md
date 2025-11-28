@@ -97,7 +97,6 @@ services:
           ip_addresses:
             - 127.0.0.1
           issuer: Test Issuer
-          position: last
       - kind: assigned_address
         spec:
           interface: dummy0

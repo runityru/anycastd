@@ -1,7 +1,8 @@
-FROM alpine:3.22.1 AS certificates
+FROM alpine:3.24.1 AS certificates
 
+# hadolint ignore=DL3018
 RUN apk add --update --no-cache \
-  ca-certificates=20250911-r0
+  ca-certificates
 
 FROM scratch
 

@@ -32,6 +32,25 @@ var (
 	buildTimestamp = "undefined"
 )
 
+// newPeer builds a gobgp peer definition. localAddress is set as the
+// transport local address so the BGP session is sourced from the configured
+// address instead of whatever the kernel picks by route lookup.
+func newPeer(peer config.Peer, localAddress string) *apipb.Peer {
+	return &apipb.Peer{
+		Conf: &apipb.PeerConf{
+			NeighborAddress: peer.RemoteAddress,
+			PeerAsn:         peer.RemoteASN,
+		},
+		EbgpMultihop: &apipb.EbgpMultihop{
+			Enabled:     peer.EnableMultihop,
+			MultihopTtl: peer.MultihopTTL,
+		},
+		Transport: &apipb.Transport{
+			LocalAddress: localAddress,
+		},
+	}
+}
+
 type spec struct {
 	ConfigPath string    `envconfig:"CONFIG_PATH" default:"/config.yaml"`
 	LogLevel   log.Level `envconfig:"LOG_LEVEL" default:"WARN"`
@@ -101,16 +120,7 @@ func main() {
 
 	for _, peer := range cfg.Announcer.Peers {
 		err = bgpSrv.AddPeer(context.Background(), &apipb.AddPeerRequest{
-			Peer: &apipb.Peer{
-				Conf: &apipb.PeerConf{
-					NeighborAddress: peer.RemoteAddress,
-					PeerAsn:         peer.RemoteASN,
-				},
-				EbgpMultihop: &apipb.EbgpMultihop{
-					Enabled:     peer.EnableMultihop,
-					MultihopTtl: peer.MultihopTTL,
-				},
-			},
+			Peer: newPeer(peer, cfg.Announcer.LocalAddress),
 		})
 		if err != nil {
 			panic(err)

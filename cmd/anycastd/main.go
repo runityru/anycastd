@@ -13,6 +13,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/runityru/anycastd/announcer"
+	"github.com/runityru/anycastd/announcer/gobgpv3"
 	"github.com/runityru/anycastd/checkers"
 	"github.com/runityru/anycastd/config"
 	"github.com/runityru/anycastd/service"
@@ -152,7 +153,7 @@ func main() {
 		}
 
 		a := announcer.New(announcer.Config{
-			GoBGP:    bgpSrv,
+			GoBGP:    gobgpv3.NewAdapter(bgpSrv),
 			Prefixes: cfg.Announcer.Routes,
 			NextHop:  cfg.Announcer.LocalAddress,
 			LocalASN: cfg.Announcer.LocalASN,

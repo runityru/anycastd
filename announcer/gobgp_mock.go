@@ -3,7 +3,6 @@ package announcer
 import (
 	"context"
 
-	api "github.com/osrg/gobgp/v3/api"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -15,14 +14,12 @@ func newGoBGPMock() *goBGPMock {
 	return &goBGPMock{}
 }
 
-func (m *goBGPMock) AddPath(_ context.Context, r *api.AddPathRequest) (*api.AddPathResponse, error) {
-	args := m.Called(r.GetPath().GetNlri().String())
-	return &api.AddPathResponse{
-		Uuid: args.Get(0).([]byte),
-	}, args.Error(1)
+func (m *goBGPMock) AddPath(_ context.Context, prefix, nextHop string) error {
+	args := m.Called(prefix, nextHop)
+	return args.Error(0)
 }
 
-func (m *goBGPMock) DeletePath(ctx context.Context, r *api.DeletePathRequest) error {
-	args := m.Called(r.GetPath().GetNlri().String())
+func (m *goBGPMock) DeletePath(_ context.Context, prefix string) error {
+	args := m.Called(prefix)
 	return args.Error(0)
 }

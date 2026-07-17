@@ -14,18 +14,18 @@ func TestAnnouncer(t *testing.T) {
 
 	call1 := goBgpM.On(
 		"AddPath",
-		"172.16.38.43/32",
-		"172.12.33.14",
+		"127.0.0.1/32",
+		"127.0.0.2",
 	).Return(nil).Once()
 	goBgpM.On(
 		"DeletePath",
-		"172.16.38.43/32",
+		"127.0.0.1/32",
 	).Return(nil).NotBefore(call1).Once()
 
 	a := New(Config{
 		GoBGP:    goBgpM,
-		Prefixes: []string{"172.16.38.43/32"},
-		NextHop:  "172.12.33.14",
+		Prefixes: []string{"127.0.0.1/32"},
+		NextHop:  "127.0.0.2",
 	})
 
 	err := a.Announce(context.Background())

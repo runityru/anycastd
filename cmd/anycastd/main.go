@@ -156,7 +156,6 @@ func main() {
 			GoBGP:    gobgpv3.NewAdapter(bgpSrv),
 			Prefixes: cfg.Announcer.Routes,
 			NextHop:  cfg.Announcer.LocalAddress,
-			LocalASN: cfg.Announcer.LocalASN,
 		})
 
 		strategy, err := service.GetStrategy(svcCfg.Strategy, svcCfg.StrategyOptions)

@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/kelseyhightower/envconfig"
 	apipb "github.com/osrg/gobgp/v3/api"
@@ -58,7 +60,8 @@ type spec struct {
 }
 
 func main() {
-	ctx := context.TODO()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	s := spec{}
 	envconfig.MustProcess("", &s)

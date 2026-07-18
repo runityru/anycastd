@@ -3,8 +3,7 @@ package gobgpv3
 
 import (
 	"context"
-	"strconv"
-	"strings"
+	"net/netip"
 
 	api "github.com/osrg/gobgp/v3/api"
 	"github.com/osrg/gobgp/v3/pkg/server"
@@ -51,15 +50,14 @@ func (a *adapter) DeletePath(ctx context.Context, prefix string) error {
 
 // newPath builds a GoBGP v3 *api.Path for the given prefix and nextHop.
 func newPath(prefix, nextHop string) (*api.Path, error) {
-	l := strings.SplitN(prefix, "/", 2)
-	prefixLen, err := strconv.ParseUint(l[1], 10, 32)
+	p, err := netip.ParsePrefix(prefix)
 	if err != nil {
 		return nil, err
 	}
 
 	nlri, err := apb.New(&api.IPAddressPrefix{
-		Prefix:    l[0],
-		PrefixLen: uint32(prefixLen),
+		Prefix:    p.Addr().String(),
+		PrefixLen: uint32(p.Bits()),
 	})
 	if err != nil {
 		return nil, err
@@ -74,8 +72,13 @@ func newPath(prefix, nextHop string) (*api.Path, error) {
 
 	attrs := []*apb.Any{a1}
 	if nextHop != "" {
+		nh, err := netip.ParseAddr(nextHop)
+		if err != nil {
+			return nil, err
+		}
+
 		a2, err := apb.New(&api.NextHopAttribute{
-			NextHop: nextHop,
+			NextHop: nh.String(),
 		})
 		if err != nil {
 			return nil, err

@@ -21,14 +21,12 @@ type Config struct {
 	GoBGP    GoBGPServer
 	Prefixes []string
 	NextHop  string
-	LocalASN uint32
 }
 
 type announcer struct {
 	gobgp    GoBGPServer
 	prefixes []string
 	nextHop  string
-	localASN uint32
 }
 
 func New(cfg Config) Announcer {
@@ -36,7 +34,6 @@ func New(cfg Config) Announcer {
 		gobgp:    cfg.GoBGP,
 		prefixes: cfg.Prefixes,
 		nextHop:  cfg.NextHop,
-		localASN: cfg.LocalASN,
 	}
 }
 

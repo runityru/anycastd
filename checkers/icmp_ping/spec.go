@@ -25,7 +25,7 @@ type spec struct {
 
 func (s spec) Validate() error {
 	return validation.ValidateStruct(&s,
-		validation.Field(&s.Static, validation.Required),
+		validation.Field(&s.Static),
 		validation.Field(&s.Tries, validation.Required),
 		validation.Field(&s.Interval, validation.Required),
 		validation.Field(&s.Timeout, validation.Required),

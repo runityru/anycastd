@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
 	github.com/beevik/ntp v1.5.0
-	github.com/go-ozzo/ozzo-validation/v4 v4.3.0
+	github.com/go-ozzo/ozzo-validation/v4 v4.4.1
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/osrg/gobgp/v3 v3.37.0
 	github.com/pin/tftp v2.1.0+incompatible

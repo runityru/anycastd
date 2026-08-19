@@ -109,9 +109,9 @@ type Config struct {
 
 func (c *Config) Validate() error {
 	return validation.ValidateStruct(c,
-		validation.Field(&c.Announcer, validation.Required),
+		validation.Field(&c.Announcer),
 		validation.Field(&c.Services, validation.Required),
-		validation.Field(&c.Metrics, validation.Required),
+		validation.Field(&c.Metrics),
 	)
 }
 

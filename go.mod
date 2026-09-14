@@ -1,6 +1,6 @@
 module github.com/runityru/anycastd
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
@@ -16,7 +16,7 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/teran/go-ptr v1.1.0
 	github.com/teran/go-time v0.0.2
-	golang.org/x/sync v0.22.0
+	golang.org/x/sync v0.23.0
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
 )

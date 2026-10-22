@@ -36,12 +36,12 @@ func (a *adapter) AddPath(ctx context.Context, prefix, nextHop string) error {
 }
 
 func (a *adapter) DeletePath(ctx context.Context, prefix string) error {
-	// For deletion in v3 we only need the NLRI part. Pass an empty nextHop
-	// since the attribute is ignored during withdrawal.
+	// GoBGP rejects a path without a next hop unless IsWithdraw is set.
 	p, err := newPath(prefix, "")
 	if err != nil {
 		return err
 	}
+	p.IsWithdraw = true
 
 	return a.srv.DeletePath(ctx, &api.DeletePathRequest{
 		Path: p,

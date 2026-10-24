@@ -81,6 +81,11 @@ func TestConfig(t *testing.T) {
 			samplePath: "testdata/sample.unknown",
 			expError:   errors.New("unexpected file format: `.unknown`"),
 		},
+		{
+			name:       "IPv6 route",
+			samplePath: "testdata/ipv6_route.yaml",
+			expError:   errors.New("announcer: (routes: (1: must be a valid IPv4 CIDR.).)."),
+		},
 	}
 
 	for _, tc := range tcs {

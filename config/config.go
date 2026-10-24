@@ -2,11 +2,11 @@ package config
 
 import (
 	"encoding/json"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/asaskevich/govalidator"
 	validation "github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/go-ozzo/ozzo-validation/v4/is"
 	"github.com/pkg/errors"
@@ -14,7 +14,11 @@ import (
 	yaml "gopkg.in/yaml.v3"
 )
 
-var isCIDR = validation.NewStringRuleWithError(govalidator.IsCIDR, validation.NewError("validation_is_cidr", "must be a valid CIDR"))
+// The announcer only speaks ipv4-unicast.
+var isIPv4CIDR = validation.NewStringRuleWithError(func(s string) bool {
+	p, err := netip.ParsePrefix(s)
+	return err == nil && p.Addr().Is4()
+}, validation.NewError("validation_is_ipv4_cidr", "must be a valid IPv4 CIDR"))
 
 var (
 	_ validation.Validatable = (*Config)(nil)
@@ -38,7 +42,7 @@ func (a Announcer) Validate() error {
 		validation.Field(&a.RouterID, validation.Required, is.IPv4),
 		validation.Field(&a.LocalAddress, validation.Required, is.IPv4),
 		validation.Field(&a.LocalASN, validation.Required),
-		validation.Field(&a.Routes, validation.Required, validation.Each(isCIDR)),
+		validation.Field(&a.Routes, validation.Required, validation.Each(isIPv4CIDR)),
 		validation.Field(&a.Peers, validation.Required),
 	)
 }

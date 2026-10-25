@@ -54,9 +54,11 @@ for the same data structure is supported. Example:
 announcer:
   router_id: 10.3.3.3
   local_address: 10.0.0.1
+  local_address6: 2001:db8::1
   local_asn: 65999
   routes:
     - 10.0.0.128/32
+    - 2001:db8:1::/48
   peers:
     - name: some_router_1
       remote_address: 10.0.0.252
@@ -65,7 +67,10 @@ announcer:
       remote_address: 10.0.0.253
       remote_asn: 65000
       enable_multihop: true
-      multihope_ttl: 3
+      multihop_ttl: 3
+    - name: some_router_3
+      remote_address: 2001:db8::252
+      remote_asn: 65000
 services:
   - name: http
     check_interval: 10s

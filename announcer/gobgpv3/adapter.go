@@ -23,8 +23,8 @@ func NewAdapter(srv *server.BgpServer) announcer.GoBGPServer {
 	return &adapter{srv: srv}
 }
 
-func (a *adapter) AddPath(ctx context.Context, prefix, nextHop string) error {
-	p, err := newPath(prefix, nextHop)
+func (a *adapter) AddPath(ctx context.Context, prefix string) error {
+	p, err := newPath(prefix)
 	if err != nil {
 		return err
 	}
@@ -36,23 +36,27 @@ func (a *adapter) AddPath(ctx context.Context, prefix, nextHop string) error {
 }
 
 func (a *adapter) DeletePath(ctx context.Context, prefix string) error {
-	// GoBGP rejects a path without a next hop unless IsWithdraw is set.
-	p, err := newPath(prefix, "")
+	p, err := newPath(prefix)
 	if err != nil {
 		return err
 	}
-	p.IsWithdraw = true
 
 	return a.srv.DeletePath(ctx, &api.DeletePathRequest{
 		Path: p,
 	})
 }
 
-// newPath builds a GoBGP v3 *api.Path for the given prefix and nextHop.
-func newPath(prefix, nextHop string) (*api.Path, error) {
+// newPath builds a GoBGP v3 unicast *api.Path for the given prefix with the
+// unspecified next hop, which GoBGP replaces with each session's local address.
+func newPath(prefix string) (*api.Path, error) {
 	p, err := netip.ParsePrefix(prefix)
 	if err != nil {
 		return nil, err
+	}
+
+	afi, nextHop := api.Family_AFI_IP, netip.IPv4Unspecified()
+	if p.Addr().Is6() {
+		afi, nextHop = api.Family_AFI_IP6, netip.IPv6Unspecified()
 	}
 
 	nlri, err := apb.New(&api.IPAddressPrefix{
@@ -70,25 +74,16 @@ func newPath(prefix, nextHop string) (*api.Path, error) {
 		return nil, err
 	}
 
-	attrs := []*apb.Any{a1}
-	if nextHop != "" {
-		nh, err := netip.ParseAddr(nextHop)
-		if err != nil {
-			return nil, err
-		}
-
-		a2, err := apb.New(&api.NextHopAttribute{
-			NextHop: nh.String(),
-		})
-		if err != nil {
-			return nil, err
-		}
-		attrs = append(attrs, a2)
+	a2, err := apb.New(&api.NextHopAttribute{
+		NextHop: nextHop.String(),
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return &api.Path{
-		Family: &api.Family{Afi: api.Family_AFI_IP, Safi: api.Family_SAFI_UNICAST},
+		Family: &api.Family{Afi: afi, Safi: api.Family_SAFI_UNICAST},
 		Nlri:   nlri,
-		Pattrs: attrs,
+		Pattrs: []*apb.Any{a1, a2},
 	}, nil
 }

@@ -14,8 +14,8 @@ func newGoBGPMock() *goBGPMock {
 	return &goBGPMock{}
 }
 
-func (m *goBGPMock) AddPath(_ context.Context, prefix, nextHop string) error {
-	args := m.Called(prefix, nextHop)
+func (m *goBGPMock) AddPath(_ context.Context, prefix string) error {
+	args := m.Called(prefix)
 	return args.Error(0)
 }
 

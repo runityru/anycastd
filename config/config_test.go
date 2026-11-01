@@ -82,9 +82,70 @@ func TestConfig(t *testing.T) {
 			expError:   errors.New("unexpected file format: `.unknown`"),
 		},
 		{
-			name:       "IPv6 route",
+			name:       "dual-stack",
 			samplePath: "testdata/ipv6_route.yaml",
-			expError:   errors.New("announcer: (routes: (1: must be a valid IPv4 CIDR.).)."),
+			expOut: Config{
+				Announcer: Announcer{
+					RouterID:      "10.3.3.3",
+					LocalAddress:  "10.0.0.1",
+					LocalAddress6: "2001:db8::1",
+					LocalASN:      65999,
+					Routes:        []string{"10.0.0.128/32", "2001:db8:1::/48"},
+					Peers: []Peer{
+						{Name: "some_router_1", RemoteAddress: "10.0.0.252", RemoteASN: 65000},
+						{Name: "some_router_2", RemoteAddress: "2001:db8::252", RemoteASN: 65000, EnableMultihop: true, MultihopTTL: 2},
+					},
+				},
+				Metrics: Metrics{Enabled: true, Address: "address"},
+			},
+		},
+		{
+			name:       "IPv6-only host",
+			samplePath: "testdata/ipv6_only.yaml",
+			expOut: Config{
+				Announcer: Announcer{
+					RouterID: "10.3.3.3",
+					LocalASN: 65999,
+					Routes:   []string{"2001:db8:1::/48"},
+					Peers:    []Peer{{Name: "some_router_1", RemoteAddress: "2001:db8::252", RemoteASN: 65000}},
+				},
+				Metrics: Metrics{Enabled: true, Address: "address"},
+			},
+		},
+		{
+			name:       "IPv6 route without IPv6 peer, empty route",
+			samplePath: "testdata/ipv6_route_without_ipv6_peer.yaml",
+			expError:   errors.New("announcer: (routes: (1: requires an IPv6 peer; 2: must be a valid CIDR.).)."),
+		},
+		{
+			name:       "IPv4 route without IPv4 peer",
+			samplePath: "testdata/ipv4_route_without_ipv4_peer.yaml",
+			expError:   errors.New("announcer: (routes: (0: requires an IPv4 peer.).)."),
+		},
+		{
+			name:       "multihop peers without local addresses",
+			samplePath: "testdata/multihop_without_local_address.yaml",
+			expError:   errors.New("announcer: (peers: (0: enable_multihop requires local_address; 1: enable_multihop requires local_address6.).)."),
+		},
+		{
+			name:       "IPv4-mapped addresses",
+			samplePath: "testdata/ipv4_mapped_peer.yaml",
+			expError:   errors.New("announcer: (local_address6: must not be an IPv4-mapped IPv6 address; peers: (0: (remote_address: must not be an IPv4-mapped IPv6 address.).).)."),
+		},
+		{
+			name:       "link-local and zoned peer addresses",
+			samplePath: "testdata/link_local.yaml",
+			expError:   errors.New("announcer: (peers: (0: (remote_address: must not be a link-local address.); 1: (remote_address: must not have a zone.).).)."),
+		},
+		{
+			name:       "unspecified local addresses count as unset, unspecified peer address",
+			samplePath: "testdata/unspecified_addresses.yaml",
+			expError:   errors.New("announcer: (peers: (0: enable_multihop requires local_address; 1: (remote_address: must not be an unspecified address.).).)."),
+		},
+		{
+			name:       "IPv4 local_address6",
+			samplePath: "testdata/local_address6_ipv4.yaml",
+			expError:   errors.New("announcer: (local_address6: must be a valid IPv6 address.)."),
 		},
 	}
 
@@ -119,7 +180,7 @@ func TestEmptyConfig(t *testing.T) {
 	_, err := NewFromFile("testdata/empty.yaml")
 	r.Error(err)
 	r.Equal(
-		"announcer: (local_address: cannot be blank; local_asn: cannot be blank; peers: cannot be blank; router_id: cannot be blank; routes: cannot be blank.); metrics: (address: cannot be blank; enabled: cannot be blank.); services: cannot be blank.",
+		"announcer: (local_asn: cannot be blank; peers: cannot be blank; router_id: cannot be blank; routes: cannot be blank.); metrics: (address: cannot be blank; enabled: cannot be blank.); services: cannot be blank.",
 		err.Error(),
 	)
 }

@@ -35,10 +35,10 @@ var (
 	buildTimestamp = "undefined"
 )
 
-// newPeer builds a gobgp peer definition. localAddress is set as the
-// transport local address so the BGP session is sourced from the configured
-// address instead of whatever the kernel picks by route lookup.
-func newPeer(peer config.Peer, localAddress string) *apipb.Peer {
+// newPeer builds a gobgp peer definition sourced from the local address of the
+// peer's family, or from the kernel route-lookup source when that is unset.
+// AfiSafis stays empty, so GoBGP enables only the family of the peer's address.
+func newPeer(peer config.Peer, a config.Announcer) *apipb.Peer {
 	return &apipb.Peer{
 		Conf: &apipb.PeerConf{
 			NeighborAddress: peer.RemoteAddress,
@@ -49,8 +49,11 @@ func newPeer(peer config.Peer, localAddress string) *apipb.Peer {
 			MultihopTtl: peer.MultihopTTL,
 		},
 		Transport: &apipb.Transport{
-			LocalAddress: localAddress,
+			LocalAddress: a.LocalAddressFor(peer),
 		},
+		// A bind to a tentative IPv6 address fails until DAD completes, and
+		// GoBGP's default retry is 120 s.
+		Timers: &apipb.Timers{Config: &apipb.TimersConfig{ConnectRetry: 5}},
 	}
 }
 
@@ -124,7 +127,7 @@ func main() {
 
 	for _, peer := range cfg.Announcer.Peers {
 		err = bgpSrv.AddPeer(context.Background(), &apipb.AddPeerRequest{
-			Peer: newPeer(peer, cfg.Announcer.LocalAddress),
+			Peer: newPeer(peer, cfg.Announcer),
 		})
 		if err != nil {
 			panic(err)
@@ -158,7 +161,6 @@ func main() {
 		a := announcer.New(announcer.Config{
 			GoBGP:    gobgpv3.NewAdapter(bgpSrv),
 			Prefixes: cfg.Announcer.Routes,
-			NextHop:  cfg.Announcer.LocalAddress,
 		})
 
 		strategy, err := service.GetStrategy(svcCfg.Strategy, svcCfg.StrategyOptions)

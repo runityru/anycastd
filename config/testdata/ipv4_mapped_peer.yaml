@@ -1,0 +1,20 @@
+---
+announcer:
+  router_id: 10.3.3.3
+  local_address6: ::ffff:10.0.0.1
+  local_asn: 65999
+  routes:
+    - 2001:db8:1::/48
+  peers:
+    - name: some_router_1
+      remote_address: ::ffff:10.0.0.252
+      remote_asn: 65000
+services:
+  - name: http
+    check_interval: 10s
+    checks:
+      - kind: dns_lookup
+        spec: {}
+metrics:
+  enabled: true
+  address: address

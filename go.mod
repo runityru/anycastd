@@ -4,7 +4,7 @@ go 1.27.2
 
 require (
 	github.com/beevik/ntp v1.6.0
-	github.com/go-ozzo/ozzo-validation/v4 v4.4.1
+	github.com/go-ozzo/ozzo-validation/v4 v4.5.0
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/osrg/gobgp/v3 v3.37.0
 	github.com/pin/tftp v2.1.0+incompatible

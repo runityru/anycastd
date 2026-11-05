@@ -1,0 +1,8 @@
+{
+    "server": "0.ru.pool.ntp.org",
+    "src_addr": "192.168.0.1",
+    "tries": 3,
+    "offset_threshold": "125ms",
+    "interval": "100ms",
+    "timeout": "5s"
+}

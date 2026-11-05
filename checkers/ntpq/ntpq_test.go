@@ -2,108 +2,122 @@ package ntpq
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/beevik/ntp"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/suite"
+	"github.com/stretchr/testify/require"
 	th "github.com/teran/go-time"
+
+	"github.com/runityru/anycastd/checkers"
 )
 
-func (s *checkTestSuite) TestOffsetTooBig() {
-	l, err := New(spec{
-		Server:          "pool.ntp.org",
-		SrcAddr:         "192.168.0.1",
-		Tries:           3,
-		OffsetThreshold: th.Duration(125 * time.Millisecond),
-		Interval:        th.Duration(2 * time.Second),
-		Timeout:         th.Duration(5 * time.Second),
-	})
-	s.Require().NoError(err)
+func TestSpec(t *testing.T) {
+	r := require.New(t)
 
-	c := l.(*ntpq)
-	c.queryFn = s.ntpM.queryMock
+	data, err := os.ReadFile("testdata/spec.json")
+	r.NoError(err)
 
-	s.ntpM.On("queryMock", "pool.ntp.org", ntp.QueryOptions{
-		LocalAddress: "192.168.0.1",
-		Timeout:      (5 * time.Second),
-	}).Return(&ntp.Response{
-		RTT:         time.Duration(15 * time.Millisecond),
-		ClockOffset: time.Duration(150 * time.Millisecond),
-		ReferenceID: 1,
-	}, nil).Times(int(c.tries))
+	c, err := checkers.NewCheckerByKind("ntpq", json.RawMessage(data))
+	r.NoError(err)
+	r.Equal("ntpq", c.Kind())
 
-	err = c.Check(context.Background())
-	s.Require().Error(err)
+	n := c.(*ntpq)
+	r.Equal("0.ru.pool.ntp.org", n.server)
+	r.Equal("192.168.0.1", n.srcAddr)
+	r.Equal(uint8(3), n.tries)
+	r.Equal(125*time.Millisecond, n.offsetThreshold)
+	r.Equal(100*time.Millisecond, n.interval)
+	r.Equal(5*time.Second, n.timeout)
 }
 
-func (s *checkTestSuite) TestOffset() {
-	l, err := New(spec{
-		Server:          "pool.ntp.org",
-		SrcAddr:         "192.168.0.1",
-		Tries:           3,
-		OffsetThreshold: th.Duration(125 * time.Millisecond),
-		Interval:        th.Duration(2 * time.Second),
-		Timeout:         th.Duration(5 * time.Second),
-	})
-	s.Require().NoError(err)
+func TestCheck(t *testing.T) {
+	now := time.Now()
+	resp := func(offset time.Duration) *ntp.Response {
+		return &ntp.Response{
+			Version:       4,
+			Stratum:       2,
+			Time:          now,
+			ReferenceTime: now.Add(-time.Minute),
+			RTT:           15 * time.Millisecond,
+			ClockOffset:   offset,
+			ReferenceID:   1,
+		}
+	}
+	ok := resp(10 * time.Millisecond)
+	tooBig := resp(150 * time.Millisecond)
+	negTooBig := resp(-150 * time.Millisecond)
 
-	c := l.(*ntpq)
-	c.queryFn = s.ntpM.queryMock
+	tcs := []struct {
+		name      string
+		responses []*ntp.Response
+		expError  string
+	}{
+		{name: "offset within threshold", responses: []*ntp.Response{ok}},
+		{name: "negative offset within threshold", responses: []*ntp.Response{resp(-10 * time.Millisecond)}},
+		{name: "offset equal to threshold", responses: []*ntp.Response{resp(125 * time.Millisecond)}},
+		{
+			name:      "offset too big",
+			responses: []*ntp.Response{tooBig, tooBig, tooBig},
+			expError:  "150ms exceeds 125ms: offset is too big",
+		},
+		{
+			name:      "negative offset too big",
+			responses: []*ntp.Response{negTooBig, negTooBig, negTooBig},
+			expError:  "-150ms exceeds 125ms: offset is too big",
+		},
+		{name: "recovers on retry", responses: []*ntp.Response{tooBig, ok}},
+	}
 
-	s.ntpM.On("queryMock", "pool.ntp.org", ntp.QueryOptions{
-		LocalAddress: "192.168.0.1",
-		Timeout:      (5 * time.Second),
-	}).Return(&ntp.Response{
-		RTT:         time.Duration(15 * time.Millisecond),
-		ClockOffset: time.Duration(10 * time.Millisecond),
-		ReferenceID: 1,
-	}, nil).Times(int(c.tries))
+	const server, srcAddr = "pool.ntp.org", "192.168.0.1"
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			r := require.New(t)
 
-	err = c.Check(context.Background())
-	s.Require().NoError(err)
-}
+			l, err := New(spec{
+				Server:          server,
+				SrcAddr:         srcAddr,
+				Tries:           3,
+				OffsetThreshold: th.Duration(125 * time.Millisecond),
+				Interval:        th.Duration(time.Millisecond),
+				Timeout:         th.Duration(5 * time.Second),
+			})
+			r.NoError(err)
 
-func (s *checkTestSuite) TestNegativeOffset() {
-	l, err := New(spec{
-		Server:          "pool.ntp.org",
-		SrcAddr:         "192.168.0.1",
-		Tries:           3,
-		OffsetThreshold: th.Duration(125 * time.Millisecond),
-		Interval:        th.Duration(2 * time.Second),
-		Timeout:         th.Duration(5 * time.Second),
-	})
-	s.Require().NoError(err)
+			m := &mockNtp{}
+			m.Test(t)
+			c := l.(*ntpq)
+			c.queryFn = m.queryMock
 
-	c := l.(*ntpq)
-	c.queryFn = s.ntpM.queryMock
+			opts := mock.MatchedBy(func(o ntp.QueryOptions) bool {
+				return o.LocalAddress == srcAddr && o.Timeout == 5*time.Second
+			})
+			for _, resp := range tc.responses {
+				m.On("queryMock", server, opts).Return(resp, nil).Once()
+			}
 
-	s.ntpM.On("queryMock", "pool.ntp.org", ntp.QueryOptions{
-		LocalAddress: "192.168.0.1",
-		Timeout:      (5 * time.Second),
-	}).Return(&ntp.Response{
-		RTT:         time.Duration(15 * time.Millisecond),
-		ClockOffset: time.Duration(-10 * time.Millisecond),
-		ReferenceID: 1,
-	}, nil).Times(int(c.tries))
+			ntpOffset.Reset()
+			ntpRtt.Reset()
 
-	err = c.Check(context.Background())
-	s.Require().NoError(err)
-}
+			err = c.Check(context.Background())
+			if tc.expError == "" {
+				r.NoError(err)
+			} else {
+				r.ErrorContains(err, tc.expError)
+			}
+			m.AssertExpectations(t)
 
-type checkTestSuite struct {
-	suite.Suite
-
-	ntpM *mockNtp
-}
-
-func (s *checkTestSuite) SetupTest() {
-	s.ntpM = &mockNtp{}
-}
-
-func TestCheckTestSuite(t *testing.T) {
-	suite.Run(t, &checkTestSuite{})
+			last := tc.responses[len(tc.responses)-1]
+			r.Equal(1, testutil.CollectAndCount(ntpOffset, "anycastd_check_last_ntp_offset_seconds"))
+			r.Equal(1, testutil.CollectAndCount(ntpRtt, "anycastd_check_last_ntp_rtt_seconds"))
+			r.InDelta(last.ClockOffset.Seconds(), testutil.ToFloat64(ntpOffset.WithLabelValues(checkName, server, srcAddr)), 1e-9)
+			r.InDelta(last.RTT.Seconds(), testutil.ToFloat64(ntpRtt.WithLabelValues(checkName, server, srcAddr)), 1e-9)
+		})
+	}
 }
 
 type mockNtp struct {

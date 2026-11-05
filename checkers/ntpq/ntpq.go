@@ -19,19 +19,19 @@ var (
 	ntpOffset = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "anycastd",
-			Name:      "check_last_ntp_offset_ms",
+			Name:      "check_last_ntp_offset_seconds",
 			Help:      "The estimated offset of the local system clock relative to the server's clock",
 		},
-		[]string{"check", "host"},
+		[]string{"check", "host", "src_addr"},
 	)
 
 	ntpRtt = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "anycastd",
-			Name:      "check_last_ntp_rtt_ms",
+			Name:      "check_last_ntp_rtt_seconds",
 			Help:      "An estimate of the round-trip-time delay between the client and the server",
 		},
-		[]string{"check", "host"},
+		[]string{"check", "host", "src_addr"},
 	)
 
 	ntpPacketsSent = prometheus.NewCounterVec(
@@ -40,10 +40,10 @@ var (
 			Name:      "check_ntp_packets_sent_total",
 			Help:      "Total amount of ntp packets sent",
 		},
-		[]string{"check", "host"},
+		[]string{"check", "host", "src_addr"},
 	)
 
-	ErrOffset = errors.New("Offset is too big")
+	ErrOffset = errors.New("offset is too big")
 )
 
 type ntpq struct {
@@ -92,7 +92,7 @@ func NewFromSpec(in json.RawMessage) (checkers.Checker, error) {
 	return New(s)
 }
 
-func (h *ntpq) Kind() string {
+func (d *ntpq) Kind() string {
 	return checkName
 }
 
@@ -127,7 +127,6 @@ func (d *ntpq) Check(ctx context.Context) error {
 }
 
 func (d *ntpq) check(_ context.Context) error {
-	// defaut timeout is 5s
 	options := ntp.QueryOptions{LocalAddress: d.srcAddr, Timeout: d.timeout}
 	response, err := d.queryFn(d.server, options)
 	if err != nil {
@@ -136,16 +135,14 @@ func (d *ntpq) check(_ context.Context) error {
 
 	log.WithFields(log.Fields{
 		"check": checkName,
-	}).Tracef("Offset: %d, RTT: %d, RefID: %d", response.ClockOffset.Milliseconds(), response.RTT.Milliseconds(), response.ReferenceID)
-	// since beevik/ntp doesn't do retries by itself we increment just by 1
-	ntpPacketsSent.WithLabelValues(checkName, d.server).Add(float64(1))
-	ntpOffset.WithLabelValues(checkName, d.server).Set(float64(response.ClockOffset.Milliseconds()))
-	ntpRtt.WithLabelValues(checkName, d.server).Set(float64(response.RTT.Milliseconds()))
+	}).Tracef("Offset: %s, RTT: %s, RefID: %s", response.ClockOffset, response.RTT, response.ReferenceString())
+	ntpPacketsSent.WithLabelValues(checkName, d.server, d.srcAddr).Inc()
+	ntpOffset.WithLabelValues(checkName, d.server, d.srcAddr).Set(response.ClockOffset.Seconds())
+	ntpRtt.WithLabelValues(checkName, d.server, d.srcAddr).Set(response.RTT.Seconds())
 
 	if response.ClockOffset.Abs() > d.offsetThreshold {
-		return ErrOffset
+		return errors.Wrapf(ErrOffset, "%s exceeds %s", response.ClockOffset, d.offsetThreshold)
 	}
 
 	return nil
-
 }

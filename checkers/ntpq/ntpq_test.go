@@ -3,6 +3,7 @@ package ntpq
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"os"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	th "github.com/teran/go-time"
+	"golang.org/x/net/dns/dnsmessage"
 
 	"github.com/runityru/anycastd/checkers"
 )
@@ -94,7 +96,7 @@ func TestCheck(t *testing.T) {
 			c.queryFn = m.queryMock
 
 			opts := mock.MatchedBy(func(o ntp.QueryOptions) bool {
-				return o.LocalAddress == srcAddr && o.Timeout == 5*time.Second
+				return o.LocalAddress == srcAddr && o.Timeout == 5*time.Second && o.Dialer != nil
 			})
 			for _, resp := range tc.responses {
 				m.On("queryMock", server, opts).Return(resp, nil).Once()
@@ -118,6 +120,76 @@ func TestCheck(t *testing.T) {
 			r.InDelta(last.RTT.Seconds(), testutil.ToFloat64(ntpRtt.WithLabelValues(checkName, server, srcAddr)), 1e-9)
 		})
 	}
+}
+
+func TestDialPicksSourceFamily(t *testing.T) {
+	dnsAddr := fakeDNS(t)
+	orig := net.DefaultResolver
+	net.DefaultResolver = &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, "udp", dnsAddr)
+		},
+	}
+	t.Cleanup(func() { net.DefaultResolver = orig })
+
+	for _, src := range []string{"127.0.0.1", "::1"} {
+		t.Run(src, func(t *testing.T) {
+			r := require.New(t)
+
+			srv, err := net.ListenPacket("udp", net.JoinHostPort(src, "0"))
+			if err != nil {
+				t.Skipf("%s unavailable: %s", src, err)
+			}
+			t.Cleanup(func() { _ = srv.Close() })
+
+			_, port, err := net.SplitHostPort(srv.LocalAddr().String())
+			r.NoError(err)
+
+			conn, err := dial(src, net.JoinHostPort("ntp.test.", port))
+			r.NoError(err)
+			t.Cleanup(func() { _ = conn.Close() })
+
+			r.Equal(srv.LocalAddr().String(), conn.RemoteAddr().String())
+			r.Equal(src, conn.LocalAddr().(*net.UDPAddr).IP.String())
+		})
+	}
+}
+
+// fakeDNS answers A queries with 127.0.0.1 and AAAA queries with ::1.
+func fakeDNS(t *testing.T) string {
+	pc, err := net.ListenPacket("udp4", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = pc.Close() })
+
+	go func() {
+		buf := make([]byte, 512)
+		for {
+			n, addr, err := pc.ReadFrom(buf)
+			if err != nil {
+				return
+			}
+			var m dnsmessage.Message
+			if m.Unpack(buf[:n]) != nil || len(m.Questions) != 1 {
+				continue
+			}
+			q := m.Questions[0]
+			var body dnsmessage.ResourceBody = &dnsmessage.AResource{A: [4]byte{127, 0, 0, 1}}
+			if q.Type == dnsmessage.TypeAAAA {
+				body = &dnsmessage.AAAAResource{AAAA: [16]byte(net.IPv6loopback)}
+			}
+			m.Response = true
+			m.Answers = []dnsmessage.Resource{{
+				Header: dnsmessage.ResourceHeader{Name: q.Name, Class: dnsmessage.ClassINET, TTL: 60},
+				Body:   body,
+			}}
+			if msg, err := m.Pack(); err == nil {
+				_, _ = pc.WriteTo(msg, addr)
+			}
+		}
+	}()
+
+	return pc.LocalAddr().String()
 }
 
 type mockNtp struct {

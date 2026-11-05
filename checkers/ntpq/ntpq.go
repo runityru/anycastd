@@ -3,6 +3,7 @@ package ntpq
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"time"
 
 	"github.com/beevik/ntp"
@@ -127,7 +128,7 @@ func (d *ntpq) Check(ctx context.Context) error {
 }
 
 func (d *ntpq) check(_ context.Context) error {
-	options := ntp.QueryOptions{LocalAddress: d.srcAddr, Timeout: d.timeout}
+	options := ntp.QueryOptions{LocalAddress: d.srcAddr, Timeout: d.timeout, Dialer: dial}
 	response, err := d.queryFn(d.server, options)
 	if err != nil {
 		return err
@@ -145,4 +146,10 @@ func (d *ntpq) check(_ context.Context) error {
 	}
 
 	return nil
+}
+
+// dial binds the source address; net.Dialer then dials only remote addresses of its family.
+func dial(localAddress, remoteAddress string) (net.Conn, error) {
+	d := net.Dialer{LocalAddr: &net.UDPAddr{IP: net.ParseIP(localAddress)}}
+	return d.Dial("udp", remoteAddress)
 }

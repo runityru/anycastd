@@ -44,7 +44,18 @@ var (
 		[]string{"check", "host", "src_addr"},
 	)
 
+	ntpUnverified = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "anycastd",
+			Name:      "check_ntp_unverified_total",
+			Help:      "Total amount of checks that could not verify the local clock",
+		},
+		[]string{"check", "host", "src_addr"},
+	)
+
 	ErrOffset = errors.New("offset is too big")
+
+	errUnverified = errors.New("unverified reply")
 )
 
 type ntpq struct {
@@ -66,6 +77,7 @@ func init() {
 	prometheus.MustRegister(ntpOffset)
 	prometheus.MustRegister(ntpPacketsSent)
 	prometheus.MustRegister(ntpRtt)
+	prometheus.MustRegister(ntpUnverified)
 }
 
 func New(s spec) (checkers.Checker, error) {
@@ -98,32 +110,46 @@ func (d *ntpq) Kind() string {
 }
 
 func (d *ntpq) Check(ctx context.Context) error {
-	var lastErr error
+	var lastErr, offsetErr error
 	for i := 0; i < int(d.tries); i++ {
 		log.WithFields(log.Fields{
 			"check":   checkName,
 			"attempt": i + 1,
 		}).Tracef("running check")
 
-		if err := d.check(ctx); err != nil {
-			lastErr = err
-			log.WithFields(log.Fields{
-				"check":   checkName,
-				"attempt": i + 1,
-			}).Infof("error received: %s", err)
-		} else {
+		err := d.check(ctx)
+		if err == nil {
 			return nil
+		}
+		if errors.Is(err, ErrOffset) {
+			offsetErr = err
+		}
+		lastErr = err
+		log.WithFields(log.Fields{
+			"check":   checkName,
+			"attempt": i + 1,
+		}).Infof("error received: %s", err)
+		if errors.Is(err, errUnverified) {
+			break
 		}
 
 		time.Sleep(d.interval)
 	}
 
-	if lastErr != nil {
+	if offsetErr != nil {
 		return errors.Errorf(
-			"check failed: %d tries with %s interval; last error: `%s`",
-			d.tries, d.interval, lastErr.Error(),
+			"check failed: %d tries with %s interval; offset error: `%s`",
+			d.tries, d.interval, offsetErr.Error(),
 		)
 	}
+
+	// No reply or an unverified reply leaves the route announced; only a verified offset failure withdraws it.
+	ntpUnverified.WithLabelValues(checkName, d.server, d.srcAddr).Inc()
+	ntpOffset.DeleteLabelValues(checkName, d.server, d.srcAddr)
+	ntpRtt.DeleteLabelValues(checkName, d.server, d.srcAddr)
+	log.WithFields(log.Fields{
+		"check": checkName,
+	}).Warnf("reference %s cannot verify local clock: %s", d.server, lastErr)
 	return nil
 }
 
@@ -138,6 +164,11 @@ func (d *ntpq) check(_ context.Context) error {
 		"check": checkName,
 	}).Tracef("Offset: %s, RTT: %s, RefID: %s", response.ClockOffset, response.RTT, response.ReferenceString())
 	ntpPacketsSent.WithLabelValues(checkName, d.server, d.srcAddr).Inc()
+
+	if err := response.Validate(); err != nil {
+		return errors.Wrapf(errUnverified, "stratum %d, refid %s: %s", response.Stratum, response.ReferenceString(), err)
+	}
+
 	ntpOffset.WithLabelValues(checkName, d.server, d.srcAddr).Set(response.ClockOffset.Seconds())
 	ntpRtt.WithLabelValues(checkName, d.server, d.srcAddr).Set(response.RTT.Seconds())
 

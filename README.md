@@ -146,7 +146,7 @@ For now the following checks are available:
 * http_2xx - performs HTTP check and expects 2xx code
 * icmp_ping - performs ICMP ping to the specified host
 * tftp_rrq - performs TFTP GET request to specified URL
-* ntpq - performs NTP query to ntp server from specific addr, checking offset
+* ntpq - checks local clock offset against remote NTP server from specific addr
 * tls_certificate - performs TLS certificate validation & provide expiration
   date via metrics
 
@@ -205,6 +205,7 @@ In addition some checkers could provide their own metrics the list of them is be
 | anycastd_check_last_ntp_offset_seconds | check, host, src_addr | The estimated offset of the local system clock relative to the server's clock |
 | anycastd_check_last_ntp_rtt_seconds    | check, host, src_addr | An estimate of the round-trip-time delay between the client and the server    |
 | anycastd_check_ntp_packets_sent_total  | check, host, src_addr | Total amount of ntp packets sent                                              |
+| anycastd_check_ntp_unverified_total    | check, host, src_addr | Total amount of checks that could not verify the local clock                  |
 
 ### GoBGP
 

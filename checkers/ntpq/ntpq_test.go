@@ -3,6 +3,7 @@ package ntpq
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
 	"testing"
@@ -53,11 +54,19 @@ func TestCheck(t *testing.T) {
 	ok := resp(10 * time.Millisecond)
 	tooBig := resp(150 * time.Millisecond)
 	negTooBig := resp(-150 * time.Millisecond)
+	unsynced := resp(150 * time.Millisecond)
+	unsynced.Stratum = 16
+	notInSync := resp(150 * time.Millisecond)
+	notInSync.Leap = ntp.LeapNotInSync
+	kod := resp(150 * time.Millisecond)
+	kod.Stratum = 0
+	noReply := (*ntp.Response)(nil)
 
 	tcs := []struct {
-		name      string
-		responses []*ntp.Response
-		expError  string
+		name       string
+		responses  []*ntp.Response
+		expError   string
+		unverified bool
 	}{
 		{name: "offset within threshold", responses: []*ntp.Response{ok}},
 		{name: "negative offset within threshold", responses: []*ntp.Response{resp(-10 * time.Millisecond)}},
@@ -73,6 +82,20 @@ func TestCheck(t *testing.T) {
 			expError:  "-150ms exceeds 125ms: offset is too big",
 		},
 		{name: "recovers on retry", responses: []*ntp.Response{tooBig, ok}},
+		{
+			name:      "unverified retry after offset failure",
+			responses: []*ntp.Response{tooBig, kod},
+			expError:  "150ms exceeds 125ms: offset is too big",
+		},
+		{
+			name:      "no reply after offset failure",
+			responses: []*ntp.Response{tooBig, noReply, noReply},
+			expError:  "150ms exceeds 125ms: offset is too big",
+		},
+		{name: "unsynchronized reference", responses: []*ntp.Response{unsynced}, unverified: true},
+		{name: "reference leap not in sync", responses: []*ntp.Response{notInSync}, unverified: true},
+		{name: "kiss of death", responses: []*ntp.Response{kod}, unverified: true},
+		{name: "no reply", responses: []*ntp.Response{noReply, noReply, noReply}, unverified: true},
 	}
 
 	const server, srcAddr = "pool.ntp.org", "192.168.0.1"
@@ -98,12 +121,23 @@ func TestCheck(t *testing.T) {
 			opts := mock.MatchedBy(func(o ntp.QueryOptions) bool {
 				return o.LocalAddress == srcAddr && o.Timeout == 5*time.Second && o.Dialer != nil
 			})
+			var verified *ntp.Response
 			for _, resp := range tc.responses {
-				m.On("queryMock", server, opts).Return(resp, nil).Once()
+				var err error
+				if resp == nil {
+					err = errors.New("i/o timeout")
+				} else if resp.Validate() == nil {
+					verified = resp
+				}
+				m.On("queryMock", server, opts).Return(resp, err).Once()
 			}
 
 			ntpOffset.Reset()
 			ntpRtt.Reset()
+			ntpUnverified.Reset()
+			// A value from an earlier run must not survive an unverified reply.
+			ntpOffset.WithLabelValues(checkName, server, srcAddr).Set(1)
+			ntpRtt.WithLabelValues(checkName, server, srcAddr).Set(1)
 
 			err = c.Check(context.Background())
 			if tc.expError == "" {
@@ -113,11 +147,18 @@ func TestCheck(t *testing.T) {
 			}
 			m.AssertExpectations(t)
 
-			last := tc.responses[len(tc.responses)-1]
+			if tc.unverified {
+				r.Equal(0, testutil.CollectAndCount(ntpOffset))
+				r.Equal(0, testutil.CollectAndCount(ntpRtt))
+				r.Equal(1.0, testutil.ToFloat64(ntpUnverified.WithLabelValues(checkName, server, srcAddr)))
+				return
+			}
+
+			r.Equal(0, testutil.CollectAndCount(ntpUnverified))
 			r.Equal(1, testutil.CollectAndCount(ntpOffset, "anycastd_check_last_ntp_offset_seconds"))
 			r.Equal(1, testutil.CollectAndCount(ntpRtt, "anycastd_check_last_ntp_rtt_seconds"))
-			r.InDelta(last.ClockOffset.Seconds(), testutil.ToFloat64(ntpOffset.WithLabelValues(checkName, server, srcAddr)), 1e-9)
-			r.InDelta(last.RTT.Seconds(), testutil.ToFloat64(ntpRtt.WithLabelValues(checkName, server, srcAddr)), 1e-9)
+			r.InDelta(verified.ClockOffset.Seconds(), testutil.ToFloat64(ntpOffset.WithLabelValues(checkName, server, srcAddr)), 1e-9)
+			r.InDelta(verified.RTT.Seconds(), testutil.ToFloat64(ntpRtt.WithLabelValues(checkName, server, srcAddr)), 1e-9)
 		})
 	}
 }

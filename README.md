@@ -7,7 +7,7 @@
 anycastd is aimed to bring new age approaches to classic applications by allowing
 to announce virtual addresses via BGP w/ service-level checks.
 
-Let's imaging you gonna create your own DNS/HTTP/whatever else service so how
+Let's imagine you're going to create your own DNS/HTTP/whatever else service so how
 to utilize L3 load balancing and remove announce when something goes wrong on
 particular node? anycastd is exactly for that! No bunch of dedicated services
 and stateful control on BGP routes and no semi-tested Python scripts anymore!
@@ -20,12 +20,12 @@ engine so that's why there's a container image in packages is available in
 parallel with traditional Go binaries.
 
 For monitoring purposes anycastd listens HTTP socket with Prometheus metrics
-endpoint so once routes are removed from the announce SRE's could go and check
+endpoint so once routes are removed from the announce SREs could go and check
 why that happened.
 
 ## Configuration
 
-anycastd longs to follow [12factor](https://12factor.net) principles however
+anycastd aims to follow [12factor](https://12factor.net) principles however
 it's not always possible to encode complex data structures into environment
 variable. So configuration is divided into two ways:
 
@@ -33,21 +33,21 @@ variable. So configuration is divided into two ways:
 
 anycastd allows to set the following options via environment variables:
 
-* `CONFIG_PATH` (string, default: `/config.yaml`) - path to the configuration file
-* `LOG_LEVEL` (ENUM, default: `WARN`) - logging verbosity level, could one of the:
-  * `TRACE`
-  * `DEBUG`
-  * `INFO`
-  * `WARNING`
-  * `ERROR`
-  * `FATAL`
-  * `PANIC`
+- `CONFIG_PATH` (string, default: `/config.yaml`) - path to the configuration file
+- `LOG_LEVEL` (ENUM, default: `WARN`) - logging verbosity level, could one of the:
+  - `TRACE`
+  - `DEBUG`
+  - `INFO`
+  - `WARNING`
+  - `ERROR`
+  - `FATAL`
+  - `PANIC`
 
 ### Configuration file
 
 Configuration file contains service configuration, i.e. how to announce,
 where to announce, checks to perform before announce. JSON and YAML formats
-for the same data structure is supported. Example:
+for the same data structure are supported. Example:
 
 ```yaml
 ---
@@ -135,19 +135,19 @@ metrics:
 ## Available checks
 
 Check (implemented via Checker interface) is core concept in anycastd, allows
-to write well-tested piece of code to enable or disable announce. In anycastd
+writing well-tested piece of code to enable or disable announce. In anycastd
 most of checks could be written without any shell invocations i.e. in pure Go
 which is a preferable way. That's why there's no exec command check ;)
 
 For now the following checks are available:
 
-* assigned_address - ensures the address is assigned on interface
-* dns_lookup - performs DNS lookup
-* http_2xx - performs HTTP check and expects 2xx code
-* icmp_ping - performs ICMP ping to the specified host
-* tftp_rrq - performs TFTP GET request to specified URL
-* ntpq - checks local clock offset against remote NTP server from specific addr
-* tls_certificate - performs TLS certificate validation & provide expiration
+- assigned_address - ensures the address is assigned on interface
+- dns_lookup - performs DNS lookup
+- http_2xx - performs HTTP check and expects 2xx code
+- icmp_ping - performs ICMP ping to the specified host
+- tftp_rrq - performs TFTP GET request to specified URL
+- ntpq - checks local clock offset against remote NTP server from specific addr
+- tls_certificate - performs TLS certificate validation & provide expiration
   date via metrics
 
 ## Metrics
@@ -165,9 +165,9 @@ For now anycastd provides the following metrics:
 
 Service could provide their metrics in order to aggregate current statuses.
 
-| Metric name         | Labels         | Description                             |
-| ------------------- | -------------- | --------------------------------------- |
-| anycastd_service_up | service, check | Service liveness status based on checks |
+| Metric name         | Labels  | Description                             |
+| ------------------- | ------- | --------------------------------------- |
+| anycastd_service_up | service | Service liveness status based on checks |
 
 ### Checks
 
@@ -177,13 +177,13 @@ Check running engine provides the following metrics.
 | ------------------------------- | -------------- | -------------------------------------- |
 | anycastd_check_duration_seconds | service, check | Duration of check execution in seconds |
 
-In addition some checkers could provide their own metrics the list of them is bellow:
+In addition some checkers could provide their own metrics the list of them is below:
 
 #### tls_certificate check
 
-| Metric name                    | Labels      | Description                                  |
-| ------------------------------ | ----------- | -------------------------------------------- |
-| certificate_expires_in_seconds | check, path | Time the certificate expires in (in seconds) |
+| Metric name                             | Labels      | Description                                  |
+| --------------------------------------- | ----------- | -------------------------------------------- |
+| anycastd_certificate_expires_in_seconds | check, path | Time the certificate expires in (in seconds) |
 
 #### icmp_ping check
 
@@ -230,6 +230,7 @@ some details about peers, sessions and announces.
 | anycastd_gobgp_received_messages_total           | router_id, peer | Total number of messages received from the peer                                                     |
 | anycastd_gobgp_received_messages_update          | router_id, peer | Number of Update messages received from the peer                                                    |
 | anycastd_gobgp_received_messages_withdraw_update | router_id, peer | Number of Withdraw Update messages received from the peer                                           |
+| anycastd_gobgp_received_messages_withdraw_prefix | router_id, peer | Number of Withdraw Prefix messages received from the peer                                           |
 | anycastd_gobgp_sent_messages_keepalive           | router_id, peer | Number of Keepalive messages sent to the peer                                                       |
 | anycastd_gobgp_sent_messages_notification        | router_id, peer | Number of Notification messages sent to the peer                                                    |
 | anycastd_gobgp_sent_messages_open                | router_id, peer | Number of Open messages sent to the peer                                                            |

@@ -7,10 +7,11 @@
 anycastd is aimed to bring new age approaches to classic applications by allowing
 to announce virtual addresses via BGP w/ service-level checks.
 
-Let's imagine you're going to create your own DNS/HTTP/whatever else service so how
-to utilize L3 load balancing and remove announce when something goes wrong on
-particular node? anycastd is exactly for that! No bunch of dedicated services
-and stateful control on BGP routes and no semi-tested Python scripts anymore!
+Let's imagine you're going to create your own DNS/HTTP/whatever else service
+so how to utilize L3 load balancing and remove announce when something goes
+wrong on particular node? anycastd is exactly for that! No bunch of dedicated
+services and stateful control on BGP routes and no semi-tested Python scripts
+anymore!
 
 ## Usage
 
@@ -33,15 +34,15 @@ variable. So configuration is divided into two ways:
 
 anycastd allows to set the following options via environment variables:
 
-- `CONFIG_PATH` (string, default: `/config.yaml`) - path to the configuration file
-- `LOG_LEVEL` (ENUM, default: `WARN`) - logging verbosity level, could one of the:
-  - `TRACE`
-  - `DEBUG`
-  - `INFO`
-  - `WARNING`
-  - `ERROR`
-  - `FATAL`
-  - `PANIC`
+* `CONFIG_PATH` (string, default: `/config.yaml`) - path to the configuration file
+* `LOG_LEVEL` (ENUM, default: `WARN`) - logging verbosity level, could one of the:
+  * `TRACE`
+  * `DEBUG`
+  * `INFO`
+  * `WARNING`
+  * `ERROR`
+  * `FATAL`
+  * `PANIC`
 
 ### Configuration file
 
@@ -141,13 +142,13 @@ which is a preferable way. That's why there's no exec command check ;)
 
 For now the following checks are available:
 
-- assigned_address - ensures the address is assigned on interface
-- dns_lookup - performs DNS lookup
-- http_2xx - performs HTTP check and expects 2xx code
-- icmp_ping - performs ICMP ping to the specified host
-- tftp_rrq - performs TFTP GET request to specified URL
-- ntpq - checks local clock offset against remote NTP server from specific addr
-- tls_certificate - performs TLS certificate validation & provide expiration
+* assigned_address - ensures the address is assigned on interface
+* dns_lookup - performs DNS lookup
+* http_2xx - performs HTTP check and expects 2xx code
+* icmp_ping - performs ICMP ping to the specified host
+* tftp_rrq - performs TFTP GET request to specified URL
+* ntpq - checks local clock offset against remote NTP server from specific addr
+* tls_certificate - performs TLS certificate validation & provide expiration
   date via metrics
 
 ## Metrics

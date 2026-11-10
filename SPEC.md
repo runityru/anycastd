@@ -14,11 +14,11 @@ as its embedded BGP engine. The module path is `github.com/runityru/anycastd`.
 
 ### Goals
 
-- Announce anycast prefixes only while a service is healthy.
-- Withdraw announced prefixes promptly when checks start failing.
-- Rely on service-level health checks written in pure Go (no shelling out).
-- Expose Prometheus metrics so operators can observe announcements and peers.
-- Follow [12-factor](https://12factor.net) principles as far as a structured
+* Announce anycast prefixes only while a service is healthy.
+* Withdraw announced prefixes promptly when checks start failing.
+* Rely on service-level health checks written in pure Go (no shelling out).
+* Expose Prometheus metrics so operators can observe announcements and peers.
+* Follow [12-factor](https://12factor.net) principles as far as a structured
   YAML/JSON configuration file allows.
 
 ## 2. High-Level Architecture
@@ -27,7 +27,7 @@ The daemon is composed of several packages. Startup and wiring happen in
 `cmd/anycastd/main.go`; the functional building blocks live in dedicated
 packages.
 
-```
+```text
 +--------------------------------------------------------------+
 | cmd/anycastd/main.go                                          |
 |   - envconfig (CONFIG_PATH, LOG_LEVEL)                        |
@@ -45,22 +45,22 @@ packages.
 
 ### Components
 
-- **`cmd/anycastd`** — entry point. Reads environment variables, loads and
+* **`cmd/anycastd`** — entry point. Reads environment variables, loads and
   validates the configuration file, initializes the GoBGP server, registers
   peers, builds one `service.Service` per configured service, and (optionally)
   starts the metrics HTTP server and the GoBGP metrics poller.
-- **`announcer`** — defines the `GoBGPServer` and `Announcer` interfaces and an
+* **`announcer`** — defines the `GoBGPServer` and `Announcer` interfaces and an
   implementation that iterates over configured prefixes, calling `AddPath` /
   `DeletePath` for each. Also hosts the GoBGP peer/session metrics poller.
-- **`announcer/gobgpv3`** — the GoBGP v3 adapter. Implements `GoBGPServer` by
+* **`announcer/gobgpv3`** — the GoBGP v3 adapter. Implements `GoBGPServer` by
   wrapping a `*server.BgpServer` and isolating all GoBGP-specific types.
-- **`checkers`** — a registry of health check implementations, keyed by
+* **`checkers`** — a registry of health check implementations, keyed by
   `kind`, with `Register` / `MustRegister` / `NewCheckerByKind`. Each checker
   implements the `Checker` interface.
-- **`service`** — the orchestration layer. Runs the check loop for a service,
+* **`service`** — the orchestration layer. Runs the check loop for a service,
   applies a strategy over the check results, decides whether the service is up
   or down, and drives the announcer accordingly. Also owns the core metrics.
-- **`config`** — YAML/JSON configuration model with validation.
+* **`config`** — YAML/JSON configuration model with validation.
 
 ## 3. Configuration
 
@@ -159,14 +159,16 @@ requires `local_address6`; an IPv4 peer requires `local_address`.
 | `strategy_options` | JSON blob       | no       | Consumed by strategies that need parameters (e.g. `n` for `at_least_n_percentage`)            |
 | `checks`           | `[]Check`       | yes      | At least one check                                                                            |
 
-**Strategies** (implemented in `service/strategy.go`, type `Strategy func([]CheckResult) (bool, error)` where the returned `bool` means _service is down_):
+**Strategies** (implemented in `service/strategy.go`, type
+`Strategy func([]CheckResult) (bool, error)` where the returned `bool` means
+_service is down_):
 
-- `all` — service is down only if **every** check failed.
-- `at_least_one` (default) — service is down if **any** check failed.
-- `all_in_group` — service is down if **every** check in any group failed;
+* `all` — service is down only if **every** check failed.
+* `at_least_one` (default) — service is down if **any** check failed.
+* `all_in_group` — service is down if **every** check in any group failed;
   checks are grouped by their `group` field. Checks with an empty `group`
   value are all aggregated into a single (empty) group.
-- `at_least_n_percentage` — service is down if the ratio of failed checks
+* `at_least_n_percentage` — service is down if the ratio of failed checks
   exceeds `n` (parsed from `strategy_options` JSON `{"n": <float>}`).
 
 ### 3.6 `check`
@@ -200,14 +202,16 @@ requires `local_address6`; an IPv4 peer requires `local_address`.
 8. Watch peer events (`WatchEventRequest.Peer`) for logging.
 9. Add each configured peer via `AddPeer`.
 10. For each service:
-    - build checkers from the registry,
-    - create an `announcer.New` with a `gobgpv3.NewAdapter(bgpSrv)` and the
+    * build checkers from the registry,
+    * create an `announcer.New` with a `gobgpv3.NewAdapter(bgpSrv)` and the
       configured routes,
-    - resolve the strategy,
-    - create and run a `service.New(...)` in the errgroup.
+    * resolve the strategy,
+    * create and run a `service.New(...)` in the errgroup.
 11. If metrics are enabled:
-    - register the Prometheus handler and `http.ListenAndServe(metrics.address, nil)`,
-    - create and run `announcer.NewMetricsRepository(...)` (GoBGP metrics poller).
+    * register the Prometheus handler and
+      `http.ListenAndServe(metrics.address, nil)`,
+    * create and run `announcer.NewMetricsRepository(...)` (GoBGP metrics
+      poller).
 12. `g.Wait()` — block until the context is cancelled or a goroutine errors.
 
 ### 4.2 Announce / denounce lifecycle (service)
@@ -242,15 +246,15 @@ for each prefix and calls the GoBGP server's `AddPath` / `DeletePath`.
 
 For each prefix, `newPath`:
 
-- Parses the prefix with `netip.ParsePrefix`.
-- Selects the address family by the address type:
-  - IPv4 → `AFI_IP`, next hop `0.0.0.0` (`netip.IPv4Unspecified()`),
-  - IPv6 → `AFI_IP6`, next hop `::` (`netip.IPv6Unspecified()`).
-- Builds the NLRI as an `IPAddressPrefix` with the prefix address and length.
-- Attaches path attributes:
-  - `OriginAttribute{Origin: 0}` (IGP origin),
-  - `NextHopAttribute{NextHop: <unspecified>}`.
-- Returns a `api.Path` with `Family: {Afi, Safi: SAFI_UNICAST}`.
+* Parses the prefix with `netip.ParsePrefix`.
+* Selects the address family by the address type:
+  * IPv4 → `AFI_IP`, next hop `0.0.0.0` (`netip.IPv4Unspecified()`),
+  * IPv6 → `AFI_IP6`, next hop `::` (`netip.IPv6Unspecified()`).
+* Builds the NLRI as an `IPAddressPrefix` with the prefix address and length.
+* Attaches path attributes:
+  * `OriginAttribute{Origin: 0}` (IGP origin),
+  * `NextHopAttribute{NextHop: <unspecified>}`.
+* Returns a `api.Path` with `Family: {Afi, Safi: SAFI_UNICAST}`.
 
 The **unspecified next hop** is intentional: GoBGP replaces it with each
 session's local address when advertising to a peer, so one path object serves
@@ -260,10 +264,10 @@ address family of its own address, and a session's local address (from
 
 **Peer configuration** (`newPeer` in main.go) builds a GoBGP `api.Peer` with:
 
-- `PeerConf{NeighborAddress, PeerAsn}` — no authentication fields are set.
-- `EbgpMultihop{Enabled, MultihopTtl}`.
-- `Transport{LocalAddress}` from `Announcer.LocalAddressFor(peer)`.
-- `Timers.Config{ConnectRetry: 5}` — GoBGP's default 120 s retry is too slow
+* `PeerConf{NeighborAddress, PeerAsn}` — no authentication fields are set.
+* `EbgpMultihop{Enabled, MultihopTtl}`.
+* `Transport{LocalAddress}` from `Announcer.LocalAddressFor(peer)`.
+* `Timers.Config{ConnectRetry: 5}` — GoBGP's default 120 s retry is too slow
   for a tentative IPv6 bind waiting for duplicate-address detection (DAD).
 
 ## 6. Checkers
@@ -277,8 +281,9 @@ type Checker interface {
 }
 ```
 
-They are registered into the package-level `registry` (a `map[string]func(json.RawMessage) (Checker, error)`
-guarded by an `RWMutex`) via `checkers.Register` / `checkers.MustRegister` in
+They are registered into the package-level `registry` (a
+`map[string]func(json.RawMessage) (Checker, error)` guarded by an `RWMutex`)
+via `checkers.Register` / `checkers.MustRegister` in
 each package's `init()`, and constructed at runtime by `checkers.NewCheckerByKind`.
 New checkers are wired into the binary by blank-importing their package in
 `cmd/anycastd/main.go`.
@@ -297,20 +302,21 @@ The seven built-in checkers are:
 
 ### `tls_certificate` spec
 
-- `local: {path}` or `remote: {host, insecure}` — exactly one is required.
-- `common_name`, `dns_names`, `ip_addresses`, `issuer` — optional expectations
+* `local: {path}` or `remote: {host, insecure}` — exactly one is required.
+* `common_name`, `dns_names`, `ip_addresses`, `issuer` — optional expectations
   checked against the server certificate.
 
 ### `icmp_ping` spec
 
-- `static: {host}` — the target host.
-- `tries`, `interval`, `timeout`.
+* `static: {host}` — the target host.
+* `tries`, `interval`, `timeout`.
 
 ### `ntpq` spec
 
-- `server` (host or IP), `src_addr` (source IP; family must match an IP-literal server).
-- `tries`, `offset_threshold`, `interval`, `timeout`.
-- A verified offset exceeding the threshold withdraws the route; an unverified
+* `server` (host or IP), `src_addr` (source IP; family must match an IP-literal
+  server).
+* `tries`, `offset_threshold`, `interval`, `timeout`.
+* A verified offset exceeding the threshold withdraws the route; an unverified
   or missing reply leaves the route announced (only a verified failure
   withdraws).
 
@@ -401,27 +407,27 @@ straight from the GoBGP peer state and is normally `0`.
 
 The security posture is **honest and limited by design**:
 
-- **No peer authentication.** `config.Peer` has no password/MD5/TLS field, and
+* **No peer authentication.** `config.Peer` has no password/MD5/TLS field, and
   `newPeer` does not populate `PeerConf.Auth`. The
   `anycastd_gobgp_peer_password_set_flag` metric merely _reads_ the flag from
   GoBGP and does not enable anything. BGP sessions are unauthenticated; secure
   the control plane at the network layer (e.g. ACLs / isolated network).
-- **TLS exists only as a health check** (`tls_certificate`), not as transport
+* **TLS exists only as a health check** (`tls_certificate`), not as transport
   security for the daemon's own endpoints. Note that `tls_certificate` accepts
   `remote.insecure: true`, which **disables server-certificate verification**
   for that check — treat it as security-relevant and use it only for
   testing/internal targets.
-- **Open metrics endpoint.** The metrics HTTP server is started with
+* **Open metrics endpoint.** The metrics HTTP server is started with
   `http.ListenAndServe(metrics.address, nil)` — **no TLS, no authentication,
   no read/write timeouts**. Bind it to a loopback or protected interface.
-- **Configuration contains no secrets.** Only `CONFIG_PATH` and `LOG_LEVEL`
+* **Configuration contains no secrets.** Only `CONFIG_PATH` and `LOG_LEVEL`
   are read from the environment; the config file holds no credentials.
-- **No external gRPC listener.** GoBGP is started with `ListenPort: -1`, so the
+* **No external gRPC listener.** GoBGP is started with `ListenPort: -1`, so the
   embedded gRPC server does not listen on an external port; anycastd drives it
   in-process.
-- **Container runs as root.** The `Dockerfile` does not define a `USER`
+* **Container runs as root.** The `Dockerfile` does not define a `USER`
   directive, so the process runs as root inside the scratch container.
-- **CI does not run security linters.** The `verify` / `release` workflows run
+* **CI does not run security linters.** The `verify` / `release` workflows run
   hadolint, markdownlint, golangci-lint, unit tests, and a goreleaser snapshot
   / Docker build, but no dedicated security scanning (e.g. gosec, Trivy).
 
@@ -429,17 +435,17 @@ The security posture is **honest and limited by design**:
 
 ### 9.1 Module and Go version
 
-- Module: `github.com/runityru/anycastd`
-- `go 1.27.2`
-- Key dependencies:
-  - `github.com/osrg/gobgp/v3 v3.37.0`
-  - `github.com/prometheus/client_golang v1.25.0`
-  - `github.com/sirupsen/logrus v1.10.2`
-  - `github.com/kelseyhightower/envconfig v1.4.0`
-  - `github.com/go-ozzo/ozzo-validation/v4 v4.5.0`
-  - `github.com/stretchr/testify v1.12.1`
-  - `github.com/teran/go-time v0.0.2`, `github.com/teran/go-ptr v1.1.0`
-  - `gopkg.in/yaml.v3 v3.0.1`, `golang.org/x/sync`, `google.golang.org/protobuf`
+* Module: `github.com/runityru/anycastd`
+* `go 1.27.2`
+* Key dependencies:
+  * `github.com/osrg/gobgp/v3 v3.37.0`
+  * `github.com/prometheus/client_golang v1.25.0`
+  * `github.com/sirupsen/logrus v1.10.2`
+  * `github.com/kelseyhightower/envconfig v1.4.0`
+  * `github.com/go-ozzo/ozzo-validation/v4 v4.5.0`
+  * `github.com/stretchr/testify v1.12.1`
+  * `github.com/teran/go-time v0.0.2`, `github.com/teran/go-ptr v1.1.0`
+  * `gopkg.in/yaml.v3 v3.0.1`, `golang.org/x/sync`, `google.golang.org/protobuf`
 
 ### 9.2 Build / test commands
 
@@ -453,38 +459,38 @@ There is no Makefile; commands are invoked directly (also in CI).
 
 ### 9.3 Release build (.goreleaser.yaml)
 
-- goreleaser config `version: 2`.
-- Single build `anycastd` from `./cmd/anycastd`, binary name `anycastd`.
-- `CGO_ENABLED=0`.
-- Target `linux` for `amd64` (with `goamd64: v1, v2, v3`) and `arm64`
+* goreleaser config `version: 2`.
+* Single build `anycastd` from `./cmd/anycastd`, binary name `anycastd`.
+* `CGO_ENABLED=0`.
+* Target `linux` for `amd64` (with `goamd64: v1, v2, v3`) and `arm64`
   (with `goarm: 7`).
-- `ldflags`: `-s -w -X main.appVersion={{.Version}} -X main.buildTimestamp={{.Date}}`.
-- Archive format `binary`; SHA-256 `checksums.txt`.
+* `ldflags`: `-s -w -X main.appVersion={{.Version}} -X main.buildTimestamp={{.Date}}`.
+* Archive format `binary`; SHA-256 `checksums.txt`.
 
 ### 9.4 Container image (Dockerfile)
 
-- Build stage from `alpine:3.24.1` to fetch `ca-certificates`.
-- Final image is `scratch`; only `/etc/ssl/cert.pem` and the static binary
+* Build stage from `alpine:3.24.1` to fetch `ca-certificates`.
+* Final image is `scratch`; only `/etc/ssl/cert.pem` and the static binary
   `/anycastd` are copied in.
-- `ENTRYPOINT ["/anycastd"]`; no `USER` directive (runs as root).
+* `ENTRYPOINT ["/anycastd"]`; no `USER` directive (runs as root).
 
 ### 9.5 CI/CD workflows
 
-- **`verify.yml`** — on push to `master` and on pull requests: hadolint,
+* **`verify.yml`** — on push to `master` and on pull requests: hadolint,
   markdownlint, golangci-lint (Go `1.27.x`, protoc `23.x`), unit tests
   (`go test ./...`), a goreleaser `build --snapshot`, and a Docker build
   (`push: false`, platform `amd64`).
-- **`release.yml`** — on tags `v*`: the same checks (hadolint, markdownlint,
+* **`release.yml`** — on tags `v*`: the same checks (hadolint, markdownlint,
   golangci-lint, unit tests + `go build -v ./...`), then goreleaser
   `release --clean`, and a Docker build **pushed** to GHCR (`ghcr.io/<repo>`
   tagged `latest`, the git tag, and the tag + timestamp).
 
 ## 10. Testing Approach
 
-- Unit tests live next to the code (`*_test.go`).
-- Interfaces are mocked with **hand-written `testify/mock` mocks** (e.g.
+* Unit tests live next to the code (`*_test.go`).
+* Interfaces are mocked with **hand-written `testify/mock` mocks** (e.g.
   `checkers/mock.go`, `announcer/mock.go`, `announcer/gobgp_mock.go`) — there is
   **no `mockgen`**.
-- The GoBGP adapter is tested against a real in-memory `server.BgpServer` pair
+* The GoBGP adapter is tested against a real in-memory `server.BgpServer` pair
   (`adapter_test.go`), asserting the next hop received by a peer BGP server for
   both IPv4 and IPv6, eBGP and iBGP.

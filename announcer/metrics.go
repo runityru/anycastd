@@ -387,7 +387,7 @@ func (m *metrics) Run(ctx context.Context) error {
 							peerRouterID,
 						).Set(float64(msgs.GetWithdrawUpdate()))
 
-						m.receivedMessagesWithdrawUpdate.WithLabelValues(
+						m.receivedMessagesWithdrawPrefix.WithLabelValues(
 							m.routerID,
 							peerRouterID,
 						).Set(float64(msgs.GetWithdrawPrefix()))

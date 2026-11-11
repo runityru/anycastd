@@ -11,7 +11,7 @@ GoBGP v3. See `SPEC.md` for the full architecture.
 
 * Module path: `github.com/runityru/anycastd`
 * Go version: `1.27.2` (CI uses `1.27.x`)
-* No Makefile — invoke Go/golangci-lint directly.
+* The `Makefile` is the single interface for build/test/lint/container tasks.
 
 ## Repository layout
 
@@ -26,14 +26,19 @@ service/                orchestration: check loop, strategies, core metrics
 
 ## Build, test, lint
 
+Use the `Makefile` (single interface, modeled on mcp-netbox) for all common
+tasks:
+
 ```sh
-go build ./...          # build everything
-go test ./...           # run all unit tests
-golangci-lint run       # static analysis
+make build             # build the binary
+make test              # run all unit tests
+make lint              # run golangci-lint + gosec + govulncheck + arch checks
+make container-image   # build the multi-arch (amd64+arm64) container image
 ```
 
-There is **no `make` target** — CI runs these commands directly. Do not add or
-reference a Makefile.
+`make lint` runs the sub-targets `lint-golangci`, `lint-gosec`, `lint-vuln`,
+and `arch`. CI runs the same Makefile targets, so keep them in sync when
+adding/removing targets.
 
 ## How checkers work
 
@@ -93,9 +98,9 @@ reference a Makefile.
 * The metrics endpoint has **no TLS/auth/timeouts**
   (`http.ListenAndServe(addr, nil)`).
 * GoBGP is started with `ListenPort: -1` (no external gRPC listener).
-* The container runs as root (no `USER` in the Dockerfile).
-* CI has no security linters. If you add auth, TLS, timeouts, or security
-  tooling, document it in `SPEC.md`.
+* The container runs as non-root `USER 65534:65534` in the Dockerfile.
+* CI runs security linters (`gosec`, `govulncheck`) as non-failing steps. If you
+  add auth, TLS, timeouts, or security tooling, document it in `SPEC.md`.
 
 ## Documentation rules
 

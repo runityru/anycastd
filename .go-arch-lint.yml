@@ -1,0 +1,103 @@
+# go-arch-lint dependency rules for anycastd.
+#
+# Package layering (outer -> inner):
+#
+#   cmd/anycastd (entrypoint, may depend on everything)
+#     ^
+#   service (orchestration: check loop, strategies, core metrics)
+#     ^
+#   announcer/gobgpv3 (GoBGP v3 adapter)
+#     ^
+#   announcer (interfaces), checkers (interface + registry), config (leaf)
+#
+# Leaf components (config, announcer, checkers) depend only on stdlib/vendor
+# code and may not import any other project component. Each checker
+# subpackage depends only on the `checkers` registry package.
+version: 2
+
+# Only project component boundaries are enforced. Any component may freely
+# import third-party (vendor) libraries.
+allow:
+  depOnAnyVendor: true
+
+exclude:
+  - dist
+
+# Test files (including external test packages) are excluded from analysis.
+excludeFiles:
+  - ".*_test\\.go$"
+
+components:
+  cmd:
+    in: cmd/anycastd
+  config:
+    in: config
+  announcer:
+    in: announcer
+  announcer/gobgpv3:
+    in: announcer/gobgpv3
+  checkers:
+    in: checkers
+  checkers/assigned_address:
+    in: checkers/assigned_address
+  checkers/dns_lookup:
+    in: checkers/dns_lookup
+  checkers/http_2xx:
+    in: checkers/http_2xx
+  checkers/icmp_ping:
+    in: checkers/icmp_ping
+  checkers/ntpq:
+    in: checkers/ntpq
+  checkers/tftp_rrq:
+    in: checkers/tftp_rrq
+  checkers/tls_certificate:
+    in: checkers/tls_certificate
+  service:
+    in: service
+
+deps:
+  # Leaf components depend only on stdlib/vendor code.
+  config:
+    anyVendorDeps: true
+  announcer:
+    anyVendorDeps: true
+  checkers:
+    anyVendorDeps: true
+
+  # The GoBGP v3 adapter implements the announcer interfaces.
+  announcer/gobgpv3:
+    mayDependOn:
+      - announcer
+
+  # Each checker subpackage registers into the checkers registry.
+  checkers/assigned_address:
+    mayDependOn:
+      - checkers
+  checkers/dns_lookup:
+    mayDependOn:
+      - checkers
+  checkers/http_2xx:
+    mayDependOn:
+      - checkers
+  checkers/icmp_ping:
+    mayDependOn:
+      - checkers
+  checkers/ntpq:
+    mayDependOn:
+      - checkers
+  checkers/tftp_rrq:
+    mayDependOn:
+      - checkers
+  checkers/tls_certificate:
+    mayDependOn:
+      - checkers
+
+  # Service orchestrates announcer and checkers.
+  service:
+    mayDependOn:
+      - announcer
+      - checkers
+
+  # Entrypoint may depend on every project component.
+  cmd:
+    anyProjectDeps: true

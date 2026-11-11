@@ -13,8 +13,6 @@ builds:
     goarch:
       - amd64
       - arm64
-    goamd64: ["v1", "v2", "v3"]
-    goarm: ["7"]
     mod_timestamp: "{{ .CommitTimestamp }}"
 archives:
   - format: binary

@@ -425,11 +425,13 @@ The security posture is **honest and limited by design**:
 * **No external gRPC listener.** GoBGP is started with `ListenPort: -1`, so the
   embedded gRPC server does not listen on an external port; anycastd drives it
   in-process.
-* **Container runs as root.** The `Dockerfile` does not define a `USER`
-  directive, so the process runs as root inside the scratch container.
-* **CI does not run security linters.** The `verify` / `release` workflows run
-  hadolint, markdownlint, golangci-lint, unit tests, and a goreleaser snapshot
-  / Docker build, but no dedicated security scanning (e.g. gosec, Trivy).
+* **Container runs as non-root.** The `Dockerfile` sets `USER 65534:65534`
+  (nobody), so the process does not run as root inside the scratch container.
+* **CI runs security linters as non-failing steps.** The `verify` / `release`
+  workflows run hadolint, markdownlint, golangci-lint, gosec and govulncheck,
+  unit tests, and a goreleaser snapshot / Docker build. gosec and govulncheck
+  report findings but do not gate the pipeline (no fail-fast on security
+  findings).
 
 ## 9. Build, Testing and CI/CD
 
@@ -450,40 +452,46 @@ The security posture is **honest and limited by design**:
 ### 9.2 Build / test commands
 
 ```sh
-go build ./...          # build all packages
-go test ./...           # run all unit tests
-golangci-lint run       # static analysis (via golangci-lint)
+make build             # build the binary
+make test              # run all unit tests
+make lint              # golangci-lint + gosec + govulncheck + arch checks
 ```
 
-There is no Makefile; commands are invoked directly (also in CI).
+All common tasks go through the `Makefile` (the single interface, modeled on
+mcp-netbox); CI invokes the same Makefile targets.
 
 ### 9.3 Release build (.goreleaser.yaml)
 
 * goreleaser config `version: 2`.
 * Single build `anycastd` from `./cmd/anycastd`, binary name `anycastd`.
 * `CGO_ENABLED=0`.
-* Target `linux` for `amd64` (with `goamd64: v1, v2, v3`) and `arm64`
-  (with `goarm: 7`).
+* Target `linux` for `amd64` and `arm64`.
 * `ldflags`: `-s -w -X main.appVersion={{.Version}} -X main.buildTimestamp={{.Date}}`.
 * Archive format `binary`; SHA-256 `checksums.txt`.
 
 ### 9.4 Container image (Dockerfile)
 
+* Multi-arch build: `amd64` and `arm64`.
 * Build stage from `alpine:3.24.1` to fetch `ca-certificates`.
 * Final image is `scratch`; only `/etc/ssl/cert.pem` and the static binary
   `/anycastd` are copied in.
-* `ENTRYPOINT ["/anycastd"]`; no `USER` directive (runs as root).
+* `ENTRYPOINT ["/anycastd"]`; runs as non-root `USER 65534:65534`.
+* OCI labels are set (e.g. `org.opencontainers.image.*`) from git metadata.
 
 ### 9.5 CI/CD workflows
 
 * **`verify.yml`** — on push to `master` and on pull requests: hadolint,
-  markdownlint, golangci-lint (Go `1.27.x`, protoc `23.x`), unit tests
-  (`go test ./...`), a goreleaser `build --snapshot`, and a Docker build
-  (`push: false`, platform `amd64`).
+  markdownlint, golangci-lint, gosec, govulncheck (Go `1.27.x`, protoc `23.x`),
+  unit tests (`make test`), a goreleaser `build --snapshot`, and a Docker build
+  (`push: false`, platforms `amd64` + `arm64`).
+* **`master.yml`** — on every push to `master`: builds and **publishes** the
+  multi-arch image to GHCR (`ghcr.io/runityru/anycastd`) tagged
+  `master-<sha>`, `master-<timestamp>`, and `master-<sha>-<timestamp>`.
 * **`release.yml`** — on tags `v*`: the same checks (hadolint, markdownlint,
   golangci-lint, unit tests + `go build -v ./...`), then goreleaser
-  `release --clean`, and a Docker build **pushed** to GHCR (`ghcr.io/<repo>`
-  tagged `latest`, the git tag, and the tag + timestamp).
+  `release --clean`, and a multi-arch Docker build **pushed** to GHCR
+  (`ghcr.io/runityru/anycastd` tagged `latest`, the git tag, and the tag +
+  timestamp). Uses `actions/setup-go` v5 and `$GITHUB_OUTPUT` for step outputs.
 
 ## 10. Testing Approach
 

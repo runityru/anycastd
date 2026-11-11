@@ -27,28 +27,51 @@ jobs:
       - uses: actions/checkout@v4
       - uses: articulate/actions-markdownlint@v1
 
-  golangci:
+  lint:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: read
-      checks: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
           go-version: '1.27.x'
+          cache: true
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
         with:
           version: "23.x"
       - name: Install dependencies
         run: go mod download
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+      # Gating static-analysis: golangci-lint + go-arch-lint only. Security
+      # linters (gosec, govulncheck) are surfaced separately in the
+      # non-gating `security` job so they never block the build.
+      - name: Lint (golangci + arch)
+        run: make lint-golangci arch
+
+  # Security linters are surfaced as a separate, NON-GATING job so they never
+  # hard-block the build (continue-on-error: true).
+  security:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
-          only-new-issues: false
-          working-directory: .
+          go-version: '1.27.x'
+          cache: true
+      - name: Install dependencies
+        run: go mod download
+      - name: Gosec (Go security scanner)
+        run: make lint-gosec
+      - name: Govulncheck (Go vulnerability scanner)
+        run: make lint-vuln
 
   unittests:
     runs-on: ubuntu-latest
@@ -58,33 +81,28 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.27.x'
+          cache: true
       - name: Install dependencies
         run: go mod download
       - name: Test with the Go CLI
-        run: go test ./...
+        run: make test
 
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: '1.27.x'
+          cache: true
       - name: Install dependencies
         run: go mod download
-      - name: Build project against .goreleaser.yaml
-        uses: goreleaser/goreleaser-action@v6
-        with:
-          distribution: goreleaser
-          version: '~> v2'
-          args: build --snapshot
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build container image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Dockerfile
-          platforms: amd64
-          push: false
+      - name: Setup GoReleaser
+        run: go install github.com/goreleaser/goreleaser/v2@v2.19.0
+      - name: Build dist artifact against .goreleaser.yaml
+        run: make build
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build multi-arch container image (no push)
+        run: make container-image

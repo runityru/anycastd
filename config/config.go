@@ -197,7 +197,16 @@ func (c *Config) Validate() error {
 func NewFromFile(filename string) (*Config, error) {
 	cfg := &Config{}
 
-	data, err := os.ReadFile(filename)
+	// Scope file access under the config file's parent directory so a
+	// path-traversal value can't read arbitrary files (gosec G304). os.Root
+	// (Go >= 1.24) confines Open/ReadFile to the rooted subtree.
+	root, err := os.OpenRoot(filepath.Dir(filename))
+	if err != nil {
+		return nil, errors.Wrap(err, "error opening configuration directory")
+	}
+	defer func() { _ = root.Close() }()
+
+	data, err := root.ReadFile(filepath.Base(filename))
 	if err != nil {
 		return nil, errors.Wrap(err, "error reading configuration file")
 	}

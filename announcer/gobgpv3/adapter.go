@@ -7,6 +7,7 @@ import (
 
 	api "github.com/osrg/gobgp/v3/api"
 	"github.com/osrg/gobgp/v3/pkg/server"
+	"github.com/pkg/errors"
 	apb "google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/runityru/anycastd/announcer"
@@ -59,9 +60,16 @@ func newPath(prefix string) (*api.Path, error) {
 		afi, nextHop = api.Family_AFI_IP6, netip.IPv6Unspecified()
 	}
 
+	// p is a validated netip.Prefix, so Bits() is always in [0,128]; guard it
+	// explicitly to keep the int->uint32 conversion provably safe (gosec G115).
+	bits := p.Bits()
+	if bits < 0 || bits > 128 {
+		return nil, errors.Errorf("invalid prefix length: %d", bits)
+	}
+
 	nlri, err := apb.New(&api.IPAddressPrefix{
 		Prefix:    p.Addr().String(),
-		PrefixLen: uint32(p.Bits()),
+		PrefixLen: uint32(bits),
 	})
 	if err != nil {
 		return nil, err

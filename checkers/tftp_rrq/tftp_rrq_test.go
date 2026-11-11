@@ -100,12 +100,25 @@ func TestCheck(t *testing.T) {
 
 			defer func() { _ = l.Close() }()
 
+			// handled is signaled by the server handler once it has served a
+			// request. The handler runs on the pin/tftp server goroutine after
+			// that goroutine initializes its internal state at the start of
+			// Serve(). Receiving from handled below therefore establishes a
+			// happens-before edge between the server goroutine and the deferred
+			// s.Shutdown(), avoiding a Serve/Shutdown data race on the
+			// library's internal `quit` field (pin/tftp v2.1.0).
+			handled := make(chan struct{}, 1)
+
 			s := tftp.NewServer(func(filename string, rf io.ReaderFrom) error {
 				buf := bytes.NewBuffer([]byte("test data"))
 				_, err := rf.ReadFrom(buf)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "%v\n", err)
 					return err
+				}
+				select {
+				case handled <- struct{}{}:
+				default:
 				}
 				return nil
 			}, nil)
@@ -127,6 +140,11 @@ func TestCheck(t *testing.T) {
 			} else {
 				r.NoError(err)
 			}
+
+			// Wait until the server has served at least one request so the
+			// deferred s.Shutdown() is ordered after the server goroutine's
+			// state was initialized (see comment above).
+			<-handled
 		})
 	}
 }

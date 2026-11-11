@@ -180,7 +180,9 @@ func main() {
 
 		g.Go(func() error {
 			http.Handle("/metrics", promhttp.Handler())
-			return http.ListenAndServe(cfg.Metrics.Address, nil)
+			// nosec G114: the metrics endpoint intentionally has no
+			// read/write timeouts (documented limitation, SPEC.md §8).
+			return http.ListenAndServe(cfg.Metrics.Address, nil) // #nosec G114
 		})
 
 		amr := announcer.NewMetricsRepository(bgpSrv, cfg.Announcer.RouterID, cfg.Announcer.LocalASN)

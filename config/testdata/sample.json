@@ -1,5 +1,6 @@
 {
   "announcer": {
+    "engine": "gobgpv3",
     "router_id": "10.3.3.3",
     "local_address": "10.0.0.1",
     "local_asn": 65999,

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -72,6 +73,13 @@ func main() {
 	cfg, err := config.NewFromFile(s.ConfigPath)
 	if err != nil {
 		panic(err)
+	}
+
+	// Only the GoBGP v3 engine is implemented. A valid config may select the v4
+	// engine, but starting it is not possible yet, so fail closed at startup
+	// rather than silently run with an unselected/default engine.
+	if cfg.Announcer.Engine != "gobgpv3" {
+		panic(fmt.Errorf("gobgp engine %q is not implemented yet; only \"gobgpv3\" is supported", cfg.Announcer.Engine))
 	}
 
 	log.SetLevel(s.LogLevel)

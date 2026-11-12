@@ -88,6 +88,7 @@ Top-level structure:
 
 ```yaml
 announcer:
+  engine: gobgpv3 # required, "gobgpv3" (only supported) | "gobgpv4" (forward-compat, not implemented); no default
   router_id: 10.3.3.3 # required, IPv4
   local_address: 10.0.0.1 # optional, IPv4
   local_address6: 2001:db8::1 # optional, IPv6
@@ -117,12 +118,26 @@ metrics:
 
 | Field            | Type       | Required | Validation                                                                                  |
 | ---------------- | ---------- | -------- | ------------------------------------------------------------------------------------------- |
+| `engine`         | `string`   | yes      | Required and fail-closed; no default. Must be `gobgpv3` (the only backend currently implemented and supported) or `gobgpv4` (accepted for forward-compatibility but not yet implemented). Omitting it or setting an unknown value is a config error |
 | `router_id`      | `string`   | yes      | IPv4 address                                                                                |
 | `local_address`  | `string`   | no       | IPv4, must be a valid _session_ address (see below)                                         |
 | `local_address6` | `string`   | no       | IPv6, must be a valid _session_ address (see below)                                         |
 | `local_asn`      | `uint32`   | yes      | Local AS number                                                                             |
 | `routes`         | `[]string` | yes      | Each entry a valid CIDR; IPv4 route requires an IPv4 peer, IPv6 route requires an IPv6 peer |
 | `peers`          | `[]Peer`   | yes      | At least one peer; multihop peers need a local address                                      |
+
+> **Breaking schema change (deliberate).** The `engine` field is **required** and
+> has **no default** — omitting it, or setting any value other than `gobgpv3` or
+> `gobgpv4`, is a config error (fail-closed); there is no implicit fallback
+> engine. The field is a **placeholder** for selecting the BGP backend so that
+> future backends (e.g. `bird`, `frr`) can be added later without breaking the
+> config schema, and its values are **namespaced by backend** (`gobgpv3` /
+> `gobgpv4`) rather than a rigid binary `v3`/`v4` scheme. As of this change
+> **only `gobgpv3` is implemented and supported**. `gobgpv4` is an accepted
+> value for forward-compatibility only — a config selecting it passes
+> validation — but that engine is **not yet implemented**: the daemon refuses to
+> start with `not implemented yet` (see §4.1) until the v4 adapter lands in a
+> later PR.
 
 **Session-address validation** (`isSessionAddress`): the address must be a
 valid IP, must **not** be an IPv6 link-local address, must **not** carry a
@@ -193,21 +208,27 @@ _service is down_):
 1. Register a signal context for `SIGINT` / `SIGTERM`.
 2. Read `CONFIG_PATH` / `LOG_LEVEL` via `envconfig.MustProcess`.
 3. Load and validate the configuration (`config.NewFromFile`).
-4. Configure logrus (level + `TextFormatter{FullTimestamp: true}`).
-5. Create an `errgroup` with the signal context.
-6. Create the GoBGP `server.BgpServer` (wrapped with a custom `announcer.Logger`)
+4. **Fail closed on the engine selector:** only the GoBGP v3 engine is currently
+   implemented and supported. If `cfg.Announcer.Engine != "gobgpv3"` (e.g. a
+   config selecting the forward-compatibility value `gobgpv4`), abort startup
+   with `gobgp engine %q is not implemented yet; only "gobgpv3" is supported`.
+   This is a startup-time check in addition to config validation — it rejects a
+   valid `gobgpv4` selection until the v4 adapter exists.
+5. Configure logrus (level + `TextFormatter{FullTimestamp: true}`).
+6. Create an `errgroup` with the signal context.
+7. Create the GoBGP `server.BgpServer` (wrapped with a custom `announcer.Logger`)
    and run `bgpSrv.Serve()` in the errgroup.
-7. `StartBgp` with the configured `RouterId`, `Asn`, and `ListenPort: -1`
+8. `StartBgp` with the configured `RouterId`, `Asn`, and `ListenPort: -1`
    (the embedded gRPC server does not listen on an external port).
-8. Watch peer events (`WatchEventRequest.Peer`) for logging.
-9. Add each configured peer via `AddPeer`.
-10. For each service:
+9. Watch peer events (`WatchEventRequest.Peer`) for logging.
+10. Add each configured peer via `AddPeer`.
+11. For each service:
     * build checkers from the registry,
     * create an `announcer.New` with a `gobgpv3.NewAdapter(bgpSrv)` and the
       configured routes,
     * resolve the strategy,
     * create and run a `service.New(...)` in the errgroup.
-11. If metrics are enabled:
+12. If metrics are enabled:
     * register the Prometheus handler and
       `http.ListenAndServe(metrics.address, nil)`,
     * create and run `announcer.NewMetricsRepository(...)` (GoBGP metrics

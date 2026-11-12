@@ -1,5 +1,6 @@
 ---
 announcer:
+  engine: gobgpv3
   router_id: 10.3.3.3
   local_asn: 65999
   routes:

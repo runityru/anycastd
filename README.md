@@ -53,6 +53,7 @@ for the same data structure are supported. Example:
 ```yaml
 ---
 announcer:
+  engine: gobgpv3
   router_id: 10.3.3.3
   local_address: 10.0.0.1
   local_address6: 2001:db8::1

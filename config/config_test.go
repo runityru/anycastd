@@ -20,6 +20,7 @@ func TestConfig(t *testing.T) {
 
 	sampleConfig := Config{
 		Announcer: Announcer{
+			Engine:       "gobgpv3",
 			RouterID:     "10.3.3.3",
 			LocalAddress: "10.0.0.1",
 			LocalASN:     65999,
@@ -77,6 +78,16 @@ func TestConfig(t *testing.T) {
 			expOut:     sampleConfig,
 		},
 		{
+			name:       "engine missing fails validation",
+			samplePath: "testdata/no_engine.yaml",
+			expError:   errors.New("announcer: (engine: cannot be blank.)."),
+		},
+		{
+			name:       "unknown engine fails validation",
+			samplePath: "testdata/engine_invalid.yaml",
+			expError:   errors.New("announcer: (engine: must be a valid value.)."),
+		},
+		{
 			name:       "wrong config file extension",
 			samplePath: "testdata/sample.unknown",
 			expError:   errors.New("unexpected file format: `.unknown`"),
@@ -86,6 +97,7 @@ func TestConfig(t *testing.T) {
 			samplePath: "testdata/ipv6_route.yaml",
 			expOut: Config{
 				Announcer: Announcer{
+					Engine:        "gobgpv3",
 					RouterID:      "10.3.3.3",
 					LocalAddress:  "10.0.0.1",
 					LocalAddress6: "2001:db8::1",
@@ -104,6 +116,7 @@ func TestConfig(t *testing.T) {
 			samplePath: "testdata/ipv6_only.yaml",
 			expOut: Config{
 				Announcer: Announcer{
+					Engine:   "gobgpv3",
 					RouterID: "10.3.3.3",
 					LocalASN: 65999,
 					Routes:   []string{"2001:db8:1::/48"},
@@ -180,7 +193,7 @@ func TestEmptyConfig(t *testing.T) {
 	_, err := NewFromFile("testdata/empty.yaml")
 	r.Error(err)
 	r.Equal(
-		"announcer: (local_asn: cannot be blank; peers: cannot be blank; router_id: cannot be blank; routes: cannot be blank.); metrics: (address: cannot be blank; enabled: cannot be blank.); services: cannot be blank.",
+		"announcer: (engine: cannot be blank; local_asn: cannot be blank; peers: cannot be blank; router_id: cannot be blank; routes: cannot be blank.); metrics: (address: cannot be blank; enabled: cannot be blank.); services: cannot be blank.",
 		err.Error(),
 	)
 }

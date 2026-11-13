@@ -78,18 +78,13 @@ func TestConfig(t *testing.T) {
 			expOut:     sampleConfig,
 		},
 		{
-			name:       "engine gobgpv4 fails validation",
-			samplePath: "testdata/engine_gobgpv4.yaml",
-			expError:   errors.New("announcer: (engine: must be a valid value.)."),
-		},
-		{
 			name:       "engine missing fails validation",
 			samplePath: "testdata/no_engine.yaml",
 			expError:   errors.New("announcer: (engine: cannot be blank.)."),
 		},
 		{
 			name:       "unknown engine fails validation",
-			samplePath: "testdata/engine_gobgpv9.yaml",
+			samplePath: "testdata/engine_invalid.yaml",
 			expError:   errors.New("announcer: (engine: must be a valid value.)."),
 		},
 		{

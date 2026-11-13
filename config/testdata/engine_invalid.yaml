@@ -1,6 +1,6 @@
 ---
 announcer:
-  engine: gobgpv9
+  engine: invalid
   router_id: 10.3.3.3
   local_asn: 65999
   routes:

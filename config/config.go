@@ -95,7 +95,7 @@ func (a Announcer) Validate() error {
 	})
 
 	return validation.ValidateStruct(&a,
-		validation.Field(&a.Engine, validation.Required, validation.In("gobgpv3", "gobgpv4")),
+		validation.Field(&a.Engine, validation.Required, validation.In("gobgpv3")),
 		validation.Field(&a.RouterID, validation.Required, is.IPv4),
 		validation.Field(&a.LocalAddress, isSessionAddress, is.IPv4),
 		validation.Field(&a.LocalAddress6, isSessionAddress, is.IPv6),

@@ -75,9 +75,9 @@ func main() {
 		panic(err)
 	}
 
-	// Only the GoBGP v3 engine is implemented. A valid config may select the v4
-	// engine, but starting it is not possible yet, so fail closed at startup
-	// rather than silently run with an unselected/default engine.
+	// Only the GoBGP v3 engine is implemented and supported. Config validation
+	// already restricts the selector to "gobgpv3", but fail closed here too as
+	// defense-in-depth rather than silently run with an unknown engine.
 	if cfg.Announcer.Engine != "gobgpv3" {
 		panic(fmt.Errorf("gobgp engine %q is not implemented yet; only \"gobgpv3\" is supported", cfg.Announcer.Engine))
 	}

@@ -78,25 +78,9 @@ func TestConfig(t *testing.T) {
 			expOut:     sampleConfig,
 		},
 		{
-			name:       "engine gobgpv4",
+			name:       "engine gobgpv4 fails validation",
 			samplePath: "testdata/engine_gobgpv4.yaml",
-			expOut: Config{
-				Announcer: Announcer{
-					Engine:   "gobgpv4",
-					RouterID: "10.3.3.3",
-					LocalASN: 65999,
-					Routes:   []string{"10.0.0.128/32"},
-					Peers:    []Peer{{Name: "some_router_1", RemoteAddress: "10.0.0.252", RemoteASN: 65000}},
-				},
-				Services: []Service{
-					{
-						Name:          "http",
-						CheckInterval: th.Duration(10 * time.Second),
-						Checks:        []Check{{Kind: "dns_lookup", Spec: json.RawMessage(`{}`)}},
-					},
-				},
-				Metrics: Metrics{Enabled: true, Address: "address"},
-			},
+			expError:   errors.New("announcer: (engine: must be a valid value.)."),
 		},
 		{
 			name:       "engine missing fails validation",

@@ -8,8 +8,7 @@ import (
 	"syscall"
 
 	"github.com/kelseyhightower/envconfig"
-	apipb "github.com/osrg/gobgp/v3/api"
-	"github.com/osrg/gobgp/v3/pkg/server"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -35,25 +34,28 @@ var (
 	buildTimestamp = "undefined"
 )
 
-// newPeer builds a gobgp peer definition sourced from the local address of the
-// peer's family, or from the kernel route-lookup source when that is unset.
-// AfiSafis stays empty, so GoBGP enables only the family of the peer's address.
-func newPeer(peer config.Peer, a config.Announcer) *apipb.Peer {
-	return &apipb.Peer{
-		Conf: &apipb.PeerConf{
-			NeighborAddress: peer.RemoteAddress,
-			PeerAsn:         peer.RemoteASN,
-		},
-		EbgpMultihop: &apipb.EbgpMultihop{
-			Enabled:     peer.EnableMultihop,
-			MultihopTtl: peer.MultihopTTL,
-		},
-		Transport: &apipb.Transport{
-			LocalAddress: a.LocalAddressFor(peer),
-		},
-		// A bind to a tentative IPv6 address fails until DAD completes, and
-		// GoBGP's default retry is 120 s.
-		Timers: &apipb.Timers{Config: &apipb.TimersConfig{ConnectRetry: 5}},
+// driverSpec maps the config Announcer onto the engine-agnostic
+// announcer.DriverSpec, resolving each peer's local address to the
+// family-appropriate value ("" lets the engine use the kernel source).
+func driverSpec(a config.Announcer) announcer.DriverSpec {
+	peers := make([]announcer.PeerSpec, 0, len(a.Peers))
+	for _, p := range a.Peers {
+		peers = append(peers, announcer.PeerSpec{
+			Name:           p.Name,
+			RemoteAddress:  p.RemoteAddress,
+			RemoteASN:      p.RemoteASN,
+			EnableMultihop: p.EnableMultihop,
+			MultihopTTL:    p.MultihopTTL,
+			LocalAddress:   a.LocalAddressFor(p),
+		})
+	}
+
+	return announcer.DriverSpec{
+		RouterID:      a.RouterID,
+		LocalASN:      a.LocalASN,
+		LocalAddress:  a.LocalAddress,
+		LocalAddress6: a.LocalAddress6,
+		Peers:         peers,
 	}
 }
 
@@ -85,54 +87,31 @@ func main() {
 	g, _ := errgroup.WithContext(ctx)
 
 	log.Trace("Initializing BGP server ...")
-	bgpSrv := server.NewBgpServer(server.LoggerOption(&announcer.Logger{Logger: &log.Logger{
+	dspec := driverSpec(cfg.Announcer)
+	driver, err := gobgpv3.NewDriver(dspec, &log.Logger{
 		Out:       os.Stderr,
 		Formatter: lf,
 		Hooks:     make(log.LevelHooks),
 		Level:     s.LogLevel,
-	}}))
+	})
+	if err != nil {
+		panic(err)
+	}
 
 	g.Go(func() error {
 		log.Trace("Starting to serve GoBGP API")
-		bgpSrv.Serve()
-		return nil
+		return driver.Serve()
 	})
 
 	log.Trace("Starting BGP sessions ...")
-	if err := bgpSrv.StartBgp(ctx, &apipb.StartBgpRequest{
-		Global: &apipb.Global{
-			RouterId:   cfg.Announcer.RouterID,
-			Asn:        cfg.Announcer.LocalASN,
-			ListenPort: -1,
-		},
-	}); err != nil {
+	if err := driver.Start(ctx, dspec); err != nil {
 		panic(err)
 	}
 	defer func() {
-		err := bgpSrv.StopBgp(ctx, &apipb.StopBgpRequest{})
-		if err != nil {
+		if err := driver.Stop(ctx); err != nil {
 			log.Warnf("error stopping BGP session: %s", err)
 		}
 	}()
-
-	if err := bgpSrv.WatchEvent(context.Background(), &apipb.WatchEventRequest{
-		Peer: &apipb.WatchEventRequest_Peer{},
-	}, func(r *apipb.WatchEventResponse) {
-		if p := r.GetPeer(); p != nil && p.Type == apipb.WatchEventResponse_PeerEvent_STATE {
-			log.Info(p)
-		}
-	}); err != nil {
-		panic(err)
-	}
-
-	for _, peer := range cfg.Announcer.Peers {
-		err = bgpSrv.AddPeer(context.Background(), &apipb.AddPeerRequest{
-			Peer: newPeer(peer, cfg.Announcer),
-		})
-		if err != nil {
-			panic(err)
-		}
-	}
 
 	metrics, err := service.NewMetrics(appVersion)
 	if err != nil {
@@ -159,7 +138,7 @@ func main() {
 		}
 
 		a := announcer.New(announcer.Config{
-			GoBGP:    gobgpv3.NewAdapter(bgpSrv),
+			GoBGP:    driver,
 			Prefixes: cfg.Announcer.Routes,
 		})
 
@@ -185,7 +164,7 @@ func main() {
 			return http.ListenAndServe(cfg.Metrics.Address, nil) // #nosec G114
 		})
 
-		amr := announcer.NewMetricsRepository(bgpSrv, cfg.Announcer.RouterID, cfg.Announcer.LocalASN)
+		amr := announcer.NewMetricsRepository(driver, cfg.Announcer.RouterID, prometheus.DefaultRegisterer, log.StandardLogger())
 		if err := amr.Register(); err != nil {
 			panic(err)
 		}

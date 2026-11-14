@@ -49,10 +49,10 @@ packages.
   validates the configuration file, initializes the GoBGP server, registers
   peers, builds one `service.Service` per configured service, and (optionally)
   starts the metrics HTTP server and the GoBGP metrics poller.
-* **`announcer`** — defines the `GoBGPServer` and `Announcer` interfaces and an
+* **`announcer`** — defines the `BGPServer` and `Announcer` interfaces and an
   implementation that iterates over configured prefixes, calling `AddPath` /
   `DeletePath` for each. Also hosts the GoBGP peer/session metrics poller.
-* **`announcer/gobgpv3`** — the GoBGP v3 adapter. Implements `GoBGPServer` by
+* **`announcer/gobgpv3`** — the GoBGP v3 adapter. Implements `BGPServer` by
   wrapping a `*server.BgpServer` and isolating all GoBGP-specific types.
 * **`checkers`** — a registry of health check implementations, keyed by
   `kind`, with `Register` / `MustRegister` / `NewCheckerByKind`. Each checker
@@ -252,13 +252,13 @@ transition, not on every tick.
 ### 4.3 Announce / denounce mechanics (announcer)
 
 `announcer.Announce(ctx)` iterates over all configured prefixes and calls
-`GoBGPServer.AddPath(ctx, prefix)` for each. `Denounce` does the same with
+`BGPServer.AddPath(ctx, prefix)` for each. `Denounce` does the same with
 `DeletePath`. The underlying adapter (`gobgpv3`) builds a GoBGP v3 `api.Path`
 for each prefix and calls the GoBGP server's `AddPath` / `DeletePath`.
 
 ## 5. BGP Behavior (gobgpv3 adapter)
 
-`gobgpv3.NewAdapter(*server.BgpServer)` returns an `announcer.GoBGPServer`.
+`gobgpv3.NewAdapter(*server.BgpServer)` returns an `announcer.BGPServer`.
 
 For each prefix, `newPath`:
 

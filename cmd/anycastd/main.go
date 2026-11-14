@@ -14,7 +14,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/runityru/anycastd/announcer"
-	"github.com/runityru/anycastd/announcer/gobgpv3"
 	"github.com/runityru/anycastd/checkers"
 	"github.com/runityru/anycastd/config"
 	"github.com/runityru/anycastd/service"
@@ -86,7 +85,8 @@ func main() {
 
 	log.Trace("Initializing BGP server ...")
 	dspec := driverSpec(cfg.Announcer)
-	driver, err := gobgpv3.NewDriver(dspec, &log.Logger{
+
+	driver, err := newGoBGPDriver(cfg.Announcer.Engine, dspec, &log.Logger{
 		Out:       os.Stderr,
 		Formatter: lf,
 		Hooks:     make(log.LevelHooks),

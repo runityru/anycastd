@@ -1,4 +1,4 @@
-package announcer
+package gobgpv3
 
 import (
 	gobgpLog "github.com/osrg/gobgp/v3/pkg/log"

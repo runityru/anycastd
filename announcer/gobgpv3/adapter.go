@@ -1,4 +1,4 @@
-// Package gobgpv3 provides a GoBGP v3 implementation of the announcer.GoBGPServer interface.
+// Package gobgpv3 provides a GoBGP v3 implementation of the announcer.BGPServer interface.
 package gobgpv3
 
 import (
@@ -18,9 +18,9 @@ type adapter struct {
 }
 
 // NewAdapter wraps a GoBGP v3 *server.BgpServer into the
-// application-level announcer.GoBGPServer interface, isolating all
+// application-level announcer.BGPServer interface, isolating all
 // GoBGP-specific types from the rest of the code.
-func NewAdapter(srv *server.BgpServer) announcer.GoBGPServer {
+func NewAdapter(srv *server.BgpServer) announcer.BGPServer {
 	return &adapter{srv: srv}
 }
 

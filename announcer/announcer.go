@@ -4,10 +4,10 @@ import (
 	"context"
 )
 
-// GoBGPServer is the interface for a BGP server that can announce and
+// BGPServer is the interface for a BGP server that can announce and
 // withdraw routes. Implementations handle the low-level details of
 // interacting with a specific BGP implementation (e.g. GoBGP v3, v4).
-type GoBGPServer interface {
+type BGPServer interface {
 	// AddPath announces prefix in its own address family, with each session's
 	// local address as the next hop.
 	AddPath(ctx context.Context, prefix string) error
@@ -20,12 +20,12 @@ type Announcer interface {
 }
 
 type Config struct {
-	GoBGP    GoBGPServer
+	GoBGP    BGPServer
 	Prefixes []string
 }
 
 type announcer struct {
-	gobgp    GoBGPServer
+	gobgp    BGPServer
 	prefixes []string
 }
 

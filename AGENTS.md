@@ -18,8 +18,8 @@ GoBGP v3. See `SPEC.md` for the full architecture.
 ```text
 cmd/anycastd/           entry point (env, config load, wiring, GoBGP server, services)
 config/                 YAML/JSON configuration model + validation (ozzo)
-announcer/              Announcer / GoBGPServer interfaces, GoBGP metrics poller
-announcer/gobgpv3/      GoBGP v3 adapter (implements GoBGPServer)
+announcer/              Announcer / BGPServer interfaces, GoBGP metrics poller
+announcer/gobgpv3/      GoBGP v3 adapter (implements BGPServer)
 checkers/               checker interface + registry; each checker is a subpackage
 service/                orchestration: check loop, strategies, core metrics
 ```

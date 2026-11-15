@@ -2,12 +2,14 @@ package gobgpv4
 
 import (
 	"context"
+	"io"
 	"net"
 	"testing"
 	"time"
 
 	api "github.com/osrg/gobgp/v4/api"
 	"github.com/osrg/gobgp/v4/pkg/server"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -46,7 +48,10 @@ func TestPeerStateSource(t *testing.T) {
 		Transport: &api.Transport{PassiveMode: true},
 	}}))
 
-	src := NewPeerStateSource(srv)
+	logger := log.New()
+	logger.SetOutput(io.Discard)
+
+	src := NewPeerStateSource(srv, logger)
 
 	// With no peers configured, ListPeers is empty and never errors.
 	states, err := src.ListPeers(ctx)
@@ -118,4 +123,31 @@ func TestNormalizePeerType(t *testing.T) {
 			r.Equal(tc.exp, normalizePeerType(tc.in))
 		})
 	}
+}
+
+// TestListPeersSkipsBadPeer verifies the per-peer mapping used by ListPeers:
+// a single peer that fails to map is skipped (logged, not errored) without
+// discarding the remaining healthy peers.
+func TestListPeersSkipsBadPeer(t *testing.T) {
+	r := require.New(t)
+	logger := log.New()
+	logger.SetOutput(io.Discard)
+	src := NewPeerStateSource(nil, logger).(*peerStateSource)
+
+	// A peer carrying a negative enum value fails to map and is skipped.
+	bad := &api.Peer{
+		Conf:  &api.PeerConf{NeighborAddress: "10.0.0.1"},
+		State: &api.PeerState{SessionState: api.PeerState_SessionState(-1)},
+	}
+	_, ok := src.mapPeer(bad)
+	r.False(ok, "a bad peer should be skipped, not error")
+
+	// A healthy peer is still mapped and returned.
+	good := &api.Peer{
+		Conf:  &api.PeerConf{NeighborAddress: "10.0.0.2"},
+		State: &api.PeerState{},
+	}
+	ps, ok := src.mapPeer(good)
+	r.True(ok, "a healthy peer should be mapped")
+	r.Equal("10.0.0.2", ps.NeighborAddress)
 }

@@ -312,12 +312,15 @@ the same semantics as v3, over GoBGP v4's native (`apiutil.Path`) API:
   next-hop attribute. GoBGP v4 requires `Withdrawal` to be set on a delete
   (otherwise it rejects the path with `nexthop not found`), and a withdrawal
   path must not carry the next-hop attribute.
-* **Peer state** (`gobgpv4.NewPeerStateSource`) maps v4 `*api.Peer` →
-  `announcer.PeerState`, **normalizing `AdminState` and `Type`** because v4
-  reserves 0 for `UNSPECIFIED` and numbers `UP=1, DOWN=2, PFX_CT=3` for
-  `AdminState` and `INTERNAL=1, EXTERNAL=2` for `Type`, whereas the
+* **Peer state** (`gobgpv4.NewPeerStateSource(srv, *log.Logger)`) maps v4
+  `*api.Peer` → `announcer.PeerState`, **normalizing `AdminState` and `Type`**
+  because v4 reserves 0 for `UNSPECIFIED` and numbers `UP=1, DOWN=2, PFX_CT=3`
+  for `AdminState` and `INTERNAL=1, EXTERNAL=2` for `Type`, whereas the
   engine-agnostic encoding is 0=up, 1=down, 2=pfx_ct (unknown → 0/up) for
   `AdminState` and 0=internal, 1=external (unknown → 0/internal) for `Type`.
+  As in v3, `ListPeers` logs and **skips a single peer that fails to map**
+  rather than failing the whole call, so one bad peer does not freeze the
+  metrics for the remaining peers.
 * **Driver** (`gobgpv4.NewDriver(spec, *log.Logger)`) mirrors the v3 driver:
   `Serve` / `Start` (start global, `WatchEvent` with
   `WatchEventMessageCallbacks{OnPeerUpdate}` + `server.WatchPeer()`, logging on

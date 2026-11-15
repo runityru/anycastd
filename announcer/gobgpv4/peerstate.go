@@ -6,6 +6,7 @@ import (
 	api "github.com/osrg/gobgp/v4/api"
 	"github.com/osrg/gobgp/v4/pkg/server"
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/runityru/anycastd/announcer"
 )
@@ -13,36 +14,43 @@ import (
 // peerStateSource adapts a GoBGP v4 *server.BgpServer into the
 // application-level announcer.PeerStateSource interface.
 type peerStateSource struct {
-	srv *server.BgpServer
+	srv    *server.BgpServer
+	logger *log.Logger
 }
 
 // NewPeerStateSource wraps a GoBGP v4 *server.BgpServer into the
 // application-level announcer.PeerStateSource interface.
-func NewPeerStateSource(srv *server.BgpServer) announcer.PeerStateSource {
-	return &peerStateSource{srv: srv}
+func NewPeerStateSource(srv *server.BgpServer, logger *log.Logger) announcer.PeerStateSource {
+	return &peerStateSource{srv: srv, logger: logger}
 }
 
 func (s *peerStateSource) ListPeers(ctx context.Context) ([]announcer.PeerState, error) {
 	out := []announcer.PeerState{}
-	var mapErr error
 	if err := s.srv.ListPeer(ctx, &api.ListPeerRequest{}, func(p *api.Peer) {
-		if mapErr != nil {
-			return
-		}
-		ps, err := peerStateFromV4(p)
-		if err != nil {
-			mapErr = err
+		ps, ok := s.mapPeer(p)
+		if !ok {
 			return
 		}
 		out = append(out, ps)
 	}); err != nil {
+		// Only a whole-call failure of the underlying ListPeer is fatal.
 		return nil, err
-	}
-	if mapErr != nil {
-		return nil, mapErr
 	}
 
 	return out, nil
+}
+
+// mapPeer maps a single v4 *api.Peer onto announcer.PeerState. A peer that
+// fails to map (e.g. a negative enum value) is logged and skipped (ok=false)
+// so that one bad peer does not discard the remaining peers nor abort the
+// metrics loop.
+func (s *peerStateSource) mapPeer(p *api.Peer) (announcer.PeerState, bool) {
+	ps, err := peerStateFromV4(p)
+	if err != nil {
+		s.logger.WithError(err).Warnf("skipping peer %q: %v", p.GetConf().GetNeighborAddress(), err)
+		return announcer.PeerState{}, false
+	}
+	return ps, true
 }
 
 // peerStateFromV4 maps a GoBGP v4 *api.Peer onto the engine-agnostic

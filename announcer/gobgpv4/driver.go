@@ -41,7 +41,7 @@ func NewDriver(spec announcer.DriverSpec, logger *log.Logger) (announcer.Driver,
 		srv:             srv,
 		logger:          slogger,
 		adapter:         adapter{srv: srv},
-		peerStateSource: peerStateSource{srv: srv},
+		peerStateSource: peerStateSource{srv: srv, logger: logger},
 	}, nil
 }
 

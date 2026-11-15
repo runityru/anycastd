@@ -46,17 +46,14 @@ func (s *peerStateSource) ListPeers(ctx context.Context) ([]announcer.PeerState,
 }
 
 // peerStateFromV4 maps a GoBGP v4 *api.Peer onto the engine-agnostic
-// announcer.PeerState. AdminState is normalized because v4's enum reserves 0
-// for UNSPECIFIED and numbers UP/DOWN/PFX_CT as 1/2/3, whereas the
-// engine-agnostic PeerState uses 0=up, 1=down, 2=pfx_ct.
+// announcer.PeerState. AdminState and Type are normalized because v4 reserves 0
+// for UNSPECIFIED and numbers UP/DOWN/PFX_CT as 1/2/3 and INTERNAL/EXTERNAL as
+// 1/2, whereas the engine-agnostic PeerState uses 0=up, 1=down, 2=pfx_ct for
+// AdminState and 0=internal, 1=external for Type.
 func peerStateFromV4(p *api.Peer) (announcer.PeerState, error) {
 	state := p.GetState()
 
 	sessionState, err := enumToUint32("session state", int32(state.GetSessionState()))
-	if err != nil {
-		return announcer.PeerState{}, err
-	}
-	peerType, err := enumToUint32("peer type", int32(state.GetType()))
 	if err != nil {
 		return announcer.PeerState{}, err
 	}
@@ -69,7 +66,7 @@ func peerStateFromV4(p *api.Peer) (announcer.PeerState, error) {
 		NeighborAddress: p.GetConf().GetNeighborAddress(),
 		AdminState:      normalizeAdminState(state.GetAdminState()),
 		SessionState:    sessionState,
-		Type:            peerType,
+		Type:            normalizePeerType(state.GetType()),
 		OutQ:            state.GetOutQ(),
 		Flops:           state.GetFlops(),
 		SendCommunity:   state.GetSendCommunity(),
@@ -91,6 +88,20 @@ func normalizeAdminState(v api.PeerState_AdminState) uint32 {
 	case api.PeerState_ADMIN_STATE_PFX_CT:
 		return 2
 	default: // ADMIN_STATE_UP, ADMIN_STATE_UNSPECIFIED, or unknown
+		return 0
+	}
+}
+
+// normalizePeerType maps GoBGP v4's PeerType onto the engine-agnostic
+// 0=internal, 1=external encoding, matching v3's enum (INTERNAL=0, EXTERNAL=1).
+// v4's enum differs from v3: it reserves 0 for UNSPECIFIED and numbers
+// INTERNAL=1, EXTERNAL=2. Any unknown value is treated as internal (0),
+// mirroring v3 where an unset peer type defaults to internal.
+func normalizePeerType(v api.PeerType) uint32 {
+	switch v {
+	case api.PeerType_PEER_TYPE_EXTERNAL:
+		return 1
+	default: // PEER_TYPE_INTERNAL, PEER_TYPE_UNSPECIFIED, or unknown
 		return 0
 	}
 }

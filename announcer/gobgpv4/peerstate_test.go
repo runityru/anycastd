@@ -99,3 +99,23 @@ func TestNormalizeAdminState(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizePeerType(t *testing.T) {
+	tcs := []struct {
+		name string
+		in   api.PeerType
+		exp  uint32
+	}{
+		{name: "unspecified maps to internal", in: api.PeerType_PEER_TYPE_UNSPECIFIED, exp: 0},
+		{name: "internal maps to internal", in: api.PeerType_PEER_TYPE_INTERNAL, exp: 0},
+		{name: "external maps to external", in: api.PeerType_PEER_TYPE_EXTERNAL, exp: 1},
+		{name: "unknown maps to internal", in: api.PeerType(99), exp: 0},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			r := require.New(t)
+			r.Equal(tc.exp, normalizePeerType(tc.in))
+		})
+	}
+}

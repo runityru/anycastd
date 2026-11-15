@@ -9,8 +9,9 @@ when a service on a node is healthy, its prefixes are announced to configured
 BGP peers; when the service becomes unhealthy, the prefixes are withdrawn so
 traffic is steered to another node.
 
-The daemon is written in Go and uses [GoBGP v3](https://github.com/osrg/gobgp)
-as its embedded BGP engine. The module path is `github.com/runityru/anycastd`.
+The daemon is written in Go and uses [GoBGP](https://github.com/osrg/gobgp)
+(v3 or v4, selectable via the config `engine` field) as its embedded BGP
+engine. The module path is `github.com/runityru/anycastd`.
 
 ### Goals
 

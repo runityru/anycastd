@@ -130,7 +130,7 @@ metrics:
 
 | Field            | Type       | Required | Validation                                                                                  |
 | ---------------- | ---------- | -------- | ------------------------------------------------------------------------------------------- |
-| `engine`         | `string`   | yes      | Required, no default. `gobgpv3` or `gobgpv4`; any other value is a config error |
+| `engine`         | `string`   | yes      | Required, no default. `gobgpv3` or `gobgpv4`; any other value is a config error             |
 | `router_id`      | `string`   | yes      | IPv4 address                                                                                |
 | `local_address`  | `string`   | no       | IPv4, must be a valid _session_ address (see below)                                         |
 | `local_address6` | `string`   | no       | IPv6, must be a valid _session_ address (see below)                                         |

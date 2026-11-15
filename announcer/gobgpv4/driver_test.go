@@ -2,6 +2,8 @@ package gobgpv4
 
 import (
 	"io"
+	"log/slog"
+	"sync"
 	"testing"
 
 	log "github.com/sirupsen/logrus"
@@ -9,6 +11,38 @@ import (
 
 	"github.com/runityru/anycastd/announcer"
 )
+
+// captureHook records every logrus entry a bridge forwards.
+type captureHook struct {
+	mu   sync.Mutex
+	msgs []string
+}
+
+func (h *captureHook) Levels() []log.Level { return log.AllLevels }
+func (h *captureHook) Fire(e *log.Entry) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.msgs = append(h.msgs, e.Message)
+	return nil
+}
+
+func TestSlogBridge(t *testing.T) {
+	r := require.New(t)
+
+	h := &captureHook{}
+	logger := log.New()
+	logger.SetOutput(io.Discard)
+	logger.AddHook(h)
+
+	sl := slog.New(&slogBridge{logger: logger})
+	sl.Info("hello from slog")
+	sl.Warn("warning from slog")
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	r.Contains(h.msgs, "hello from slog")
+	r.Contains(h.msgs, "warning from slog")
+}
 
 func TestNewDriver(t *testing.T) {
 	r := require.New(t)

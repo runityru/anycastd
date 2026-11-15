@@ -49,7 +49,8 @@ packages.
 * **`cmd/anycastd`** — entry point. Reads environment variables, loads and
   validates the configuration file, builds the engine-agnostic
   `announcer.DriverSpec` from the announcer config, constructs and starts the
-  GoBGP v3 driver (`gobgpv3.NewDriver` + `Serve`/`Start`), builds one
+  BGP driver selected by the config `engine` field via `newGoBGPDriver`
+  (`gobgpv3.NewDriver` or `gobgpv4.NewDriver` + `Serve`/`Start`), builds one
   `service.Service` per configured service, and (optionally) starts the metrics
   HTTP server and the GoBGP metrics poller.
 * **`announcer`** — defines the version-agnostic contracts (`Driver`,
@@ -504,6 +505,7 @@ The security posture is **honest and limited by design**:
 * `go 1.27.2`
 * Key dependencies:
   * `github.com/osrg/gobgp/v3 v3.37.0`
+  * `github.com/osrg/gobgp/v4 v4.11.0`
   * `github.com/prometheus/client_golang v1.25.0`
   * `github.com/sirupsen/logrus v1.10.2`
   * `github.com/kelseyhightower/envconfig v1.4.0`

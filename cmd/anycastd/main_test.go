@@ -8,41 +8,49 @@ import (
 	"github.com/runityru/anycastd/config"
 )
 
-func TestNewPeer(t *testing.T) {
-	tcs := []struct {
-		name            string
-		remoteAddress   string
-		localAddress    string
-		localAddress6   string
-		expLocalAddress string
-	}{
-		{name: "IPv4 peer", remoteAddress: "10.0.0.1", localAddress: "10.0.0.2", localAddress6: "2001:db8::2", expLocalAddress: "10.0.0.2"},
-		{name: "IPv6 peer", remoteAddress: "2001:db8::1", localAddress: "10.0.0.2", localAddress6: "2001:db8::2", expLocalAddress: "2001:db8::2"},
-		{name: "IPv4 peer without local_address", remoteAddress: "10.0.0.1", localAddress6: "2001:db8::2"},
-		{name: "IPv6 peer without local_address6", remoteAddress: "2001:db8::1", localAddress: "10.0.0.2"},
-		{name: "IPv4 peer with unspecified local_address", remoteAddress: "10.0.0.1", localAddress: "0.0.0.0", localAddress6: "2001:db8::2"},
-		{name: "IPv6 peer with unspecified local_address6", remoteAddress: "2001:db8::1", localAddress: "10.0.0.2", localAddress6: "::0"},
+func TestDriverSpec(t *testing.T) {
+	a := config.Announcer{
+		Engine:        "gobgpv3",
+		RouterID:      "192.0.2.1",
+		LocalASN:      64512,
+		LocalAddress:  "10.0.0.1",
+		LocalAddress6: "2001:db8::1",
+		Peers: []config.Peer{
+			{Name: "v4", RemoteAddress: "10.0.0.2", RemoteASN: 64513},
+			{Name: "v6", RemoteAddress: "2001:db8::2", RemoteASN: 64513},
+		},
 	}
 
-	for _, tc := range tcs {
-		t.Run(tc.name, func(t *testing.T) {
-			r := require.New(t)
+	spec := driverSpec(a)
 
-			p := newPeer(config.Peer{
-				Name:           "test-peer",
-				RemoteAddress:  tc.remoteAddress,
-				RemoteASN:      65000,
-				EnableMultihop: true,
-				MultihopTTL:    2,
-			}, config.Announcer{LocalAddress: tc.localAddress, LocalAddress6: tc.localAddress6})
+	require.Equal(t, "192.0.2.1", spec.RouterID)
+	require.Equal(t, uint32(64512), spec.LocalASN)
+	require.Len(t, spec.Peers, 2)
 
-			r.Equal(tc.remoteAddress, p.Conf.NeighborAddress)
-			r.Equal(uint32(65000), p.Conf.PeerAsn)
-			r.True(p.EbgpMultihop.Enabled)
-			r.Equal(uint32(2), p.EbgpMultihop.MultihopTtl)
-			r.NotNil(p.Transport)
-			r.Equal(tc.expLocalAddress, p.Transport.LocalAddress)
-			r.Equal(uint64(5), p.Timers.Config.ConnectRetry)
-		})
+	// IPv4 peer resolves to the IPv4 local address.
+	require.Equal(t, "10.0.0.1", spec.Peers[0].LocalAddress)
+	// IPv6 peer resolves to the IPv6 local address.
+	require.Equal(t, "2001:db8::1", spec.Peers[1].LocalAddress)
+
+	require.Equal(t, "v4", spec.Peers[0].Name)
+	require.Equal(t, "10.0.0.2", spec.Peers[0].RemoteAddress)
+	require.Equal(t, uint32(64513), spec.Peers[0].RemoteASN)
+}
+
+func TestDriverSpecUnsetLocalAddress(t *testing.T) {
+	a := config.Announcer{
+		RouterID: "192.0.2.1",
+		LocalASN: 64512,
+		Peers: []config.Peer{
+			{Name: "v4", RemoteAddress: "10.0.0.2", RemoteASN: 64513},
+			{Name: "v6", RemoteAddress: "2001:db8::2", RemoteASN: 64513},
+		},
 	}
+
+	spec := driverSpec(a)
+
+	// Unset/unspecified local addresses resolve to "" so the engine falls back
+	// to the kernel route-lookup source (config.Announcer.LocalAddressFor).
+	require.Equal(t, "", spec.Peers[0].LocalAddress)
+	require.Equal(t, "", spec.Peers[1].LocalAddress)
 }

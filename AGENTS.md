@@ -16,10 +16,10 @@ GoBGP v3. See `SPEC.md` for the full architecture.
 ## Repository layout
 
 ```text
-cmd/anycastd/           entry point (env, config load, wiring, GoBGP server, services)
+cmd/anycastd/           entry point (env, config load, wiring, driver construction/start, services)
 config/                 YAML/JSON configuration model + validation (ozzo)
-announcer/              Announcer / GoBGPServer interfaces, GoBGP metrics poller
-announcer/gobgpv3/      GoBGP v3 adapter (implements GoBGPServer)
+announcer/              version-agnostic contracts (Driver, BGPServer, PeerStateSource, DriverSpec/PeerSpec), metrics poller
+announcer/gobgpv3/      full GoBGP v3 Driver implementation (NewDriver/NewAdapter/NewPeerStateSource)
 checkers/               checker interface + registry; each checker is a subpackage
 service/                orchestration: check loop, strategies, core metrics
 ```

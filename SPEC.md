@@ -32,7 +32,7 @@ packages.
 | cmd/anycastd/main.go                                          |
 |   - envconfig (CONFIG_PATH, LOG_LEVEL)                        |
 |   - loads config, wires errgroup, signals                     |
-|   - starts GoBGP server, adds peers, starts services          |
+|   - builds driver spec, starts BGP driver, starts services    |
 +--------------------------------------------------------------+
         |                     |                    |
         v                     v                    v
@@ -46,14 +46,20 @@ packages.
 ### Components
 
 * **`cmd/anycastd`** — entry point. Reads environment variables, loads and
-  validates the configuration file, initializes the GoBGP server, registers
-  peers, builds one `service.Service` per configured service, and (optionally)
-  starts the metrics HTTP server and the GoBGP metrics poller.
-* **`announcer`** — defines the `GoBGPServer` and `Announcer` interfaces and an
+  validates the configuration file, builds the engine-agnostic
+  `announcer.DriverSpec` from the announcer config, constructs and starts the
+  GoBGP v3 driver (`gobgpv3.NewDriver` + `Serve`/`Start`), builds one
+  `service.Service` per configured service, and (optionally) starts the metrics
+  HTTP server and the GoBGP metrics poller.
+* **`announcer`** — defines the version-agnostic contracts (`Driver`,
+  `BGPServer`, `PeerStateSource`, `ServerLifecycle`, `PeerManager`, `DriverSpec`
+  / `PeerSpec`, `PeerState`) and the `Announcer` interface, plus an
   implementation that iterates over configured prefixes, calling `AddPath` /
   `DeletePath` for each. Also hosts the GoBGP peer/session metrics poller.
-* **`announcer/gobgpv3`** — the GoBGP v3 adapter. Implements `GoBGPServer` by
-  wrapping a `*server.BgpServer` and isolating all GoBGP-specific types.
+* **`announcer/gobgpv3`** — the full GoBGP v3 implementation of
+  `announcer.Driver`. Exports `NewDriver`, `NewAdapter`, and
+  `NewPeerStateSource`, wrapping a `*server.BgpServer` and isolating all
+  GoBGP-specific types behind the version-agnostic contracts.
 * **`checkers`** — a registry of health check implementations, keyed by
   `kind`, with `Register` / `MustRegister` / `NewCheckerByKind`. Each checker
   implements the `Checker` interface.
@@ -202,33 +208,34 @@ _service is down_):
 
 1. Register a signal context for `SIGINT` / `SIGTERM`.
 2. Read `CONFIG_PATH` / `LOG_LEVEL` via `envconfig.MustProcess`.
-3. Load and validate the configuration (`config.NewFromFile`).
-4. **Fail closed on the engine selector:** only the GoBGP v3 engine is currently
-   implemented and supported. If `cfg.Announcer.Engine != "gobgpv3"`, abort
-   startup with `gobgp engine %q is not implemented yet; only "gobgpv3" is
-   supported`. This is a startup-time check in addition to config validation
-   (defense-in-depth), since config validation already restricts the selector
-   to `gobgpv3`.
-5. Configure logrus (level + `TextFormatter{FullTimestamp: true}`).
-6. Create an `errgroup` with the signal context.
-7. Create the GoBGP `server.BgpServer` (wrapped with a custom `announcer.Logger`)
-   and run `bgpSrv.Serve()` in the errgroup.
-8. `StartBgp` with the configured `RouterId`, `Asn`, and `ListenPort: -1`
-   (the embedded gRPC server does not listen on an external port).
-9. Watch peer events (`WatchEventRequest.Peer`) for logging.
-10. Add each configured peer via `AddPeer`.
-11. For each service:
+3. Load and validate the configuration (`config.NewFromFile`). The `engine`
+   selector is enforced **here**: validation restricts it to `gobgpv3` (the only
+   supported backend), and `main` hard-uses the GoBGP v3 driver — there is no
+   separate startup-time guard.
+4. Configure logrus (level + `TextFormatter{FullTimestamp: true}`).
+5. Create an `errgroup` with the signal context.
+6. Build the engine-agnostic `announcer.DriverSpec` via `driverSpec(cfg.Announcer)`,
+   resolving each peer's `LocalAddress` with `cfg.Announcer.LocalAddressFor`.
+7. Construct the driver with `gobgpv3.NewDriver(dspec, logger)` (construction
+   only — no BGP wiring yet).
+8. Run `driver.Serve()` in the errgroup. GoBGP's `StartBgp` / `WatchEvent` block
+   until `Serve` runs, so `Serve` must be running before `Start`.
+9. Start BGP with `driver.Start(ctx, dspec)`: it calls `StartBgp` with
+   `RouterId`, `Asn`, and `ListenPort: -1` (the embedded gRPC server does not
+   listen on an external port), registers peer-`STATE` `WatchEvent` logging, and
+   applies `spec.Peers` via `AddPeer` per peer.
+10. For each service:
     * build checkers from the registry,
-    * create an `announcer.New` with a `gobgpv3.NewAdapter(bgpSrv)` and the
+    * create an `announcer.New` with the driver (satisfying `BGPServer`) and the
       configured routes,
     * resolve the strategy,
     * create and run a `service.New(...)` in the errgroup.
-12. If metrics are enabled:
+11. If metrics are enabled:
     * register the Prometheus handler and
       `http.ListenAndServe(metrics.address, nil)`,
-    * create and run `announcer.NewMetricsRepository(...)` (GoBGP metrics
-      poller).
-13. `g.Wait()` — block until the context is cancelled or a goroutine errors.
+    * create and run `announcer.NewMetricsRepository(driver, routerID, ...)`
+      (GoBGP metrics poller).
+12. `g.Wait()` — block until the context is cancelled or a goroutine errors.
 
 ### 4.2 Announce / denounce lifecycle (service)
 
@@ -252,15 +259,18 @@ transition, not on every tick.
 ### 4.3 Announce / denounce mechanics (announcer)
 
 `announcer.Announce(ctx)` iterates over all configured prefixes and calls
-`GoBGPServer.AddPath(ctx, prefix)` for each. `Denounce` does the same with
+`BGPServer.AddPath(ctx, prefix)` for each. `Denounce` does the same with
 `DeletePath`. The underlying adapter (`gobgpv3`) builds a GoBGP v3 `api.Path`
 for each prefix and calls the GoBGP server's `AddPath` / `DeletePath`.
 
-## 5. BGP Behavior (gobgpv3 adapter)
+## 5. BGP Behavior (gobgpv3 driver)
 
-`gobgpv3.NewAdapter(*server.BgpServer)` returns an `announcer.GoBGPServer`.
+`announcer/gobgpv3` provides the full GoBGP v3 `Driver`. `NewDriver` returns an
+`announcer.Driver` (ServerLifecycle + PeerManager + PeerStateSource + BGPServer);
+`NewAdapter(*server.BgpServer)` returns an `announcer.BGPServer`, and
+`NewPeerStateSource` an `announcer.PeerStateSource`.
 
-For each prefix, `newPath`:
+For each prefix, `newPath` (in `announcer/gobgpv3/adapter.go`):
 
 * Parses the prefix with `netip.ParsePrefix`.
 * Selects the address family by the address type:
@@ -278,11 +288,13 @@ all peers of a family. Dual-stack is supported: a prefix is announced in the
 address family of its own address, and a session's local address (from
 `LocalAddressFor`) is used as the source.
 
-**Peer configuration** (`newPeer` in main.go) builds a GoBGP `api.Peer` with:
+**Peer configuration** (`newPeer` in `announcer/gobgpv3/driver.go`) builds a
+GoBGP `api.Peer` from an `announcer.PeerSpec` with:
 
 * `PeerConf{NeighborAddress, PeerAsn}` — no authentication fields are set.
 * `EbgpMultihop{Enabled, MultihopTtl}`.
-* `Transport{LocalAddress}` from `Announcer.LocalAddressFor(peer)`.
+* `Transport{LocalAddress}` from `PeerSpec.LocalAddress` (already resolved by
+  `Announcer.LocalAddressFor`).
 * `Timers.Config{ConnectRetry: 5}` — GoBGP's default 120 s retry is too slow
   for a tentative IPv6 bind waiting for duplicate-address detection (DAD).
 
@@ -385,9 +397,9 @@ are polled every **1 second** by `announcer.NewMetricsRepository(...).Run`.
 | `anycastd_gobgp_sent_messages_withdraw_update`     | `router_id, peer` |
 | `anycastd_gobgp_sent_messages_withdraw_prefix`     | `router_id, peer` |
 
-`peer_password_set_flag` is set from `peerState.GetAuthPassword()`; because
-anycastd does not configure peer authentication (see §8), it reads the flag
-straight from the GoBGP peer state and is normally `0`.
+`peer_password_set_flag` is set from `PeerState.PasswordSet` (mapped from the
+GoBGP peer's `AuthPassword`); because anycastd does not configure peer
+authentication (see §8), it is normally `0`.
 
 ### 7.3 Checker metrics
 
@@ -424,7 +436,8 @@ straight from the GoBGP peer state and is normally `0`.
 The security posture is **honest and limited by design**:
 
 * **No peer authentication.** `config.Peer` has no password/MD5/TLS field, and
-  `newPeer` does not populate `PeerConf.Auth`. The
+  `newPeer` (in `announcer/gobgpv3/driver.go`) does not populate
+  `PeerConf.Auth`. The
   `anycastd_gobgp_peer_password_set_flag` metric merely _reads_ the flag from
   GoBGP and does not enable anything. BGP sessions are unauthenticated; secure
   the control plane at the network layer (e.g. ACLs / isolated network).

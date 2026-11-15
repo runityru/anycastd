@@ -4,9 +4,8 @@ import (
 	"context"
 	"time"
 
-	apipb "github.com/osrg/gobgp/v3/api"
-	"github.com/osrg/gobgp/v3/pkg/server"
 	"github.com/prometheus/client_golang/prometheus"
+	log "github.com/sirupsen/logrus"
 )
 
 type Metrics interface {
@@ -44,12 +43,13 @@ type metrics struct {
 	bgpPeerPasswordSetFlag   *prometheus.GaugeVec
 	bgpPeerType              *prometheus.GaugeVec
 
-	bgpSrv   *server.BgpServer
+	src      PeerStateSource
 	routerID string
-	asn      uint32
+	reg      prometheus.Registerer
+	logger   *log.Logger
 }
 
-func NewMetricsRepository(bgpSrv *server.BgpServer, routerID string, asn uint32) Metrics {
+func NewMetricsRepository(src PeerStateSource, routerID string, reg prometheus.Registerer, logger *log.Logger) Metrics {
 	m := &metrics{
 		peerCount: prometheus.NewGaugeVec(
 			prometheus.GaugeOpts{
@@ -280,166 +280,175 @@ func NewMetricsRepository(bgpSrv *server.BgpServer, routerID string, asn uint32)
 			[]string{"router_id", "peer"},
 		),
 
-		bgpSrv:   bgpSrv,
+		src:      src,
 		routerID: routerID,
-		asn:      asn,
+		reg:      reg,
+		logger:   logger,
 	}
 	return m
 }
 
+// collect fetches the current peer state and updates every gauge. A failure to
+// list peers is logged and the loop continues with the previous values, so a
+// transient error never aborts the metrics goroutine.
+func (m *metrics) collect(ctx context.Context) {
+	peers, err := m.src.ListPeers(ctx)
+	if err != nil {
+		m.logger.WithError(err).Error("failed to list peers; skipping metrics update")
+		return
+	}
+
+	m.peerCount.WithLabelValues(m.routerID).Set(float64(len(peers)))
+
+	for _, peer := range peers {
+		peerRouterID := peer.NeighborAddress
+
+		m.peerAdminState.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.AdminState))
+
+		m.peerSessionState.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.SessionState))
+
+		m.bgpPeerOutQueueCount.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.OutQ))
+
+		m.bgpPeerFlopsCount.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.Flops))
+
+		m.bgpPeerSendCommunityFlag.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.SendCommunity))
+
+		m.bgpPeerRemovePrivateFlag.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.RemovePrivate))
+
+		m.bgpPeerPasswordSetFlag.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(boolToFloat64(peer.PasswordSet))
+
+		m.bgpPeerType.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.Type))
+
+		m.receivedMessagesTotal.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.Received.Total))
+
+		m.receivedMessagesNotification.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.Received.Notification))
+
+		m.receivedMessagesUpdate.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.Received.Update))
+
+		m.receivedMessagesOpen.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.Received.Open))
+
+		m.receivedMessagesKeepalive.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.Received.Keepalive))
+
+		m.receivedMessagesRefresh.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.Received.Refresh))
+
+		m.receivedMessagesWithdrawUpdate.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.Received.WithdrawUpdate))
+
+		m.receivedMessagesWithdrawPrefix.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.Received.WithdrawPrefix))
+
+		m.sentMessagesTotal.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.Sent.Total))
+
+		m.sentMessagesNotification.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.Sent.Notification))
+
+		m.sentMessagesUpdate.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.Sent.Update))
+
+		m.sentMessagesOpen.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.Sent.Open))
+
+		m.sentMessagesKeepalive.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.Sent.Keepalive))
+
+		m.sentMessagesRefresh.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.Sent.Refresh))
+
+		m.sentMessagesWithdrawUpdate.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.Sent.WithdrawUpdate))
+
+		m.sentMessagesWithdrawPrefix.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.Sent.WithdrawPrefix))
+	}
+}
+
+// Run ticks once per second, refreshing all gauges, until the context is
+// cancelled. It returns nil on shutdown so the errgroup in main exits cleanly
+// (no panic on SIGTERM/SIGINT), and a transient ListPeers error never aborts
+// the loop (collect logs and carries on).
 func (m *metrics) Run(ctx context.Context) error {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			peers := []*apipb.Peer{}
-			if err := m.bgpSrv.ListPeer(ctx, &apipb.ListPeerRequest{}, func(p *apipb.Peer) {
-				peers = append(peers, p)
-			}); err != nil {
-				return err
-			}
-
-			m.peerCount.WithLabelValues(m.routerID).Set(float64(len(peers)))
-
-			for _, peer := range peers {
-				peerState := peer.GetState()
-				peerRouterID := peer.GetConf().GetNeighborAddress()
-
-				m.peerAdminState.WithLabelValues(
-					m.routerID,
-					peerRouterID,
-				).Set(float64(peerState.GetAdminState()))
-
-				m.peerSessionState.WithLabelValues(
-					m.routerID,
-					peerRouterID,
-				).Set(float64(peerState.GetSessionState()))
-
-				m.bgpPeerOutQueueCount.WithLabelValues(
-					m.routerID,
-					peerRouterID,
-				).Set(float64(peerState.GetOutQ()))
-
-				m.bgpPeerFlopsCount.WithLabelValues(
-					m.routerID,
-					peerRouterID,
-				).Set(float64(peerState.GetFlops()))
-
-				m.bgpPeerSendCommunityFlag.WithLabelValues(
-					m.routerID,
-					peerRouterID,
-				).Set(float64(peerState.GetSendCommunity()))
-
-				m.bgpPeerRemovePrivateFlag.WithLabelValues(
-					m.routerID,
-					peerRouterID,
-				).Set(float64(peerState.GetRemovePrivate()))
-
-				passwordSetFlag := 0.0
-				if peerState.GetAuthPassword() != "" {
-					passwordSetFlag = 1.0
-				}
-				m.bgpPeerPasswordSetFlag.WithLabelValues(
-					m.routerID,
-					peerRouterID,
-				).Set(passwordSetFlag)
-
-				m.bgpPeerType.WithLabelValues(
-					m.routerID,
-					peerRouterID,
-				).Set(float64(peerState.GetType()))
-
-				if peerMessages := peerState.GetMessages(); peerMessages != nil {
-					if msgs := peerMessages.GetReceived(); msgs != nil {
-						m.receivedMessagesTotal.WithLabelValues(
-							m.routerID,
-							peerRouterID,
-						).Set(float64(msgs.GetTotal()))
-
-						m.receivedMessagesNotification.WithLabelValues(
-							m.routerID,
-							peerRouterID,
-						).Set(float64(msgs.GetNotification()))
-
-						m.receivedMessagesUpdate.WithLabelValues(
-							m.routerID,
-							peerRouterID,
-						).Set(float64(msgs.GetUpdate()))
-
-						m.receivedMessagesOpen.WithLabelValues(
-							m.routerID,
-							peerRouterID,
-						).Set(float64(msgs.GetOpen()))
-
-						m.receivedMessagesKeepalive.WithLabelValues(
-							m.routerID,
-							peerRouterID,
-						).Set(float64(msgs.GetKeepalive()))
-
-						m.receivedMessagesRefresh.WithLabelValues(
-							m.routerID,
-							peerRouterID,
-						).Set(float64(msgs.GetRefresh()))
-
-						m.receivedMessagesWithdrawUpdate.WithLabelValues(
-							m.routerID,
-							peerRouterID,
-						).Set(float64(msgs.GetWithdrawUpdate()))
-
-						m.receivedMessagesWithdrawPrefix.WithLabelValues(
-							m.routerID,
-							peerRouterID,
-						).Set(float64(msgs.GetWithdrawPrefix()))
-					}
-
-					if msgs := peerMessages.GetSent(); msgs != nil {
-						m.sentMessagesTotal.WithLabelValues(
-							m.routerID,
-							peerRouterID,
-						).Set(float64(msgs.GetTotal()))
-
-						m.sentMessagesNotification.WithLabelValues(
-							m.routerID,
-							peerRouterID,
-						).Set(float64(msgs.GetNotification()))
-
-						m.sentMessagesUpdate.WithLabelValues(
-							m.routerID,
-							peerRouterID,
-						).Set(float64(msgs.GetUpdate()))
-
-						m.sentMessagesOpen.WithLabelValues(
-							m.routerID,
-							peerRouterID,
-						).Set(float64(msgs.GetOpen()))
-
-						m.sentMessagesKeepalive.WithLabelValues(
-							m.routerID,
-							peerRouterID,
-						).Set(float64(msgs.GetKeepalive()))
-
-						m.sentMessagesRefresh.WithLabelValues(
-							m.routerID,
-							peerRouterID,
-						).Set(float64(msgs.GetRefresh()))
-
-						m.sentMessagesWithdrawUpdate.WithLabelValues(
-							m.routerID,
-							peerRouterID,
-						).Set(float64(msgs.GetWithdrawUpdate()))
-
-						m.sentMessagesWithdrawPrefix.WithLabelValues(
-							m.routerID,
-							peerRouterID,
-						).Set(float64(msgs.GetWithdrawPrefix()))
-					}
-				}
-			}
-
-			time.Sleep(1 * time.Second)
+			return nil
+		case <-ticker.C:
+			m.collect(ctx)
 		}
 	}
+}
+
+// boolToFloat64 converts a boolean into a 0.0/1.0 Prometheus gauge value.
+func boolToFloat64(b bool) float64 {
+	if b {
+		return 1.0
+	}
+	return 0.0
 }
 
 func (m *metrics) Register() error {
@@ -473,7 +482,7 @@ func (m *metrics) Register() error {
 		m.sentMessagesWithdrawUpdate,
 		m.sentMessagesWithdrawPrefix,
 	} {
-		if err := prometheus.Register(mc); err != nil {
+		if err := m.reg.Register(mc); err != nil {
 			return err
 		}
 	}

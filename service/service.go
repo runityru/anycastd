@@ -90,17 +90,18 @@ func (s *service) run(ctx context.Context) error {
 		if s.announced.Load() {
 			if err := s.announcer.Denounce(ctx); err != nil {
 				log.Warnf("denounce failed: %s", err)
+			} else {
+				s.announced.Store(false)
 			}
-			s.announced.Store(false)
 		}
 	} else {
 		if !s.announced.Load() {
 			if err := s.announcer.Announce(ctx); err != nil {
 				log.Warnf("announce failed: %s", err)
+			} else {
+				s.announced.Store(true)
 			}
 		}
-
-		s.announced.Store(true)
 	}
 
 	return nil

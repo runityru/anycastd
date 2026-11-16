@@ -74,6 +74,76 @@ func (s *serviceTestSuite) TestRunPassThenFailThenPass() {
 	}
 }
 
+// TestRunAnnounceFailureRetried verifies that a failed Announce does not mark
+// the service as announced, so the announce is retried on the next run.
+func (s *serviceTestSuite) TestRunAnnounceFailureRetried() {
+	aCall1 := s.announcerM.On("Announce").Return(errors.New("announce error")).Once()
+	s.announcerM.On("Announce").Return(nil).NotBefore(aCall1).Once()
+
+	s.checkM.On("Kind").Return("test_check").Times(2)
+	s.checkM.On("Check").Return(nil).Times(2)
+
+	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Times(2)
+	s.metricsM.On("ServiceUp", "test_service").Return().Times(2)
+
+	strategy, _ := GetStrategyNoOptions("")
+	svc := New("test_service", s.announcerM, []Checker{{s.checkM, ""}}, 1*time.Second, s.metricsM, strategy).(*service)
+
+	// Run 1: service up, announce fails -> announced must stay false (retried later).
+	err := svc.run(s.ctx)
+	s.Require().NoError(err)
+	s.Require().False(svc.announced.Load(), "announced must remain false after failed announce")
+
+	// Run 2: service up, announce is retried and succeeds -> announced becomes true.
+	err = svc.run(s.ctx)
+	s.Require().NoError(err)
+	s.Require().True(svc.announced.Load(), "announced must become true after successful announce")
+}
+
+// TestRunDenounceFailureRetried verifies that a failed Denounce keeps the
+// service marked as announced, so the denounce is retried on the next run.
+func (s *serviceTestSuite) TestRunDenounceFailureRetried() {
+	aCall1 := s.announcerM.On("Announce").Return(nil).Once()
+	aCall2 := s.announcerM.On("Denounce").Return(errors.New("denounce error")).NotBefore(aCall1).Once()
+	s.announcerM.On("Denounce").Return(nil).NotBefore(aCall2).Once()
+
+	// Run 1: service up, announce succeeds.
+	s.checkM.On("Kind").Return("test_check").Once()
+	s.checkM.On("Check").Return(nil).Once()
+	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Once()
+	s.metricsM.On("ServiceUp", "test_service").Return().Once()
+
+	// Run 2: service down, denounce fails -> announced must stay true.
+	s.checkM.On("Kind").Return("test_check").Once()
+	s.checkM.On("Check").Return(errors.New("check error")).Once()
+	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Once()
+	s.metricsM.On("ServiceDown", "test_service").Return().Once()
+
+	// Run 3: service down, denounce is retried and succeeds.
+	s.checkM.On("Kind").Return("test_check").Once()
+	s.checkM.On("Check").Return(errors.New("check error")).Once()
+	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Once()
+	s.metricsM.On("ServiceDown", "test_service").Return().Once()
+
+	strategy, _ := GetStrategyNoOptions("")
+	svc := New("test_service", s.announcerM, []Checker{{s.checkM, ""}}, 1*time.Second, s.metricsM, strategy).(*service)
+
+	// Run 1: service up, announce succeeds -> announced becomes true.
+	err := svc.run(s.ctx)
+	s.Require().NoError(err)
+	s.Require().True(svc.announced.Load(), "announced must be true after successful announce")
+
+	// Run 2: service down, denounce fails -> announced must stay true (retried later).
+	err = svc.run(s.ctx)
+	s.Require().NoError(err)
+	s.Require().True(svc.announced.Load(), "announced must stay true after failed denounce")
+
+	// Run 3: service down, denounce is retried and succeeds -> announced becomes false.
+	err = svc.run(s.ctx)
+	s.Require().NoError(err)
+	s.Require().False(svc.announced.Load(), "announced must become false after successful denounce")
+}
+
 // Definitions ...
 type serviceTestSuite struct {
 	suite.Suite

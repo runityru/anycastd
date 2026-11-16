@@ -88,6 +88,21 @@ func TestConfig(t *testing.T) {
 			expError:   errors.New("announcer: (engine: must be a valid value.)."),
 		},
 		{
+			name:       "gobgpv4 engine is valid",
+			samplePath: "testdata/engine_gobgpv4.yaml",
+			expOut: Config{
+				Announcer: Announcer{
+					Engine:       "gobgpv4",
+					RouterID:     "10.3.3.3",
+					LocalAddress: "10.0.0.1",
+					LocalASN:     65999,
+					Routes:       []string{"10.0.0.128/32"},
+					Peers:        []Peer{{Name: "some_router_1", RemoteAddress: "10.0.0.252", RemoteASN: 65000}},
+				},
+				Metrics: Metrics{Enabled: true, Address: "127.0.0.1:9090"},
+			},
+		},
+		{
 			name:       "wrong config file extension",
 			samplePath: "testdata/sample.unknown",
 			expError:   errors.New("unexpected file format: `.unknown`"),

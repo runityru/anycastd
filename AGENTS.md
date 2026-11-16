@@ -7,7 +7,8 @@ file and `SPEC.md` in **English** — this is a project rule.
 
 `anycastd` is a Go daemon that announces / withdraws anycast (virtual) address
 prefixes over BGP based on service health checks. The embedded BGP engine is
-GoBGP v3. See `SPEC.md` for the full architecture.
+GoBGP (v3 or v4, selectable via the config `engine` field). See `SPEC.md` for
+the full architecture.
 
 * Module path: `github.com/runityru/anycastd`
 * Go version: `1.27.2` (CI uses `1.27.x`)
@@ -20,6 +21,7 @@ cmd/anycastd/           entry point (env, config load, wiring, driver constructi
 config/                 YAML/JSON configuration model + validation (ozzo)
 announcer/              version-agnostic contracts (Driver, BGPServer, PeerStateSource, DriverSpec/PeerSpec), metrics poller
 announcer/gobgpv3/      full GoBGP v3 Driver implementation (NewDriver/NewAdapter/NewPeerStateSource)
+announcer/gobgpv4/      full GoBGP v4 Driver implementation (NewDriver/NewAdapter/NewPeerStateSource)
 checkers/               checker interface + registry; each checker is a subpackage
 service/                orchestration: check loop, strategies, core metrics
 ```
@@ -74,8 +76,9 @@ adding/removing targets.
 * Interfaces are mocked with **hand-written `testify/mock` mocks**. There is
   **no `mockgen`** and no generated mocks.
 * Examples: `checkers/mock.go`, `announcer/mock.go`, `announcer/gobgp_mock.go`.
-* The GoBGP adapter is tested against a real in-memory `server.BgpServer` pair
-  (`announcer/gobgpv3/adapter_test.go`), covering IPv4/IPv6 × eBGP/iBGP.
+* The GoBGP adapters are tested against a real in-memory `server.BgpServer` pair
+  (`announcer/gobgpv3/adapter_test.go` and `announcer/gobgpv4/adapter_test.go`),
+  covering IPv4/IPv6 × eBGP/iBGP.
 * Write unit tests next to the code (`*_test.go`). Testability is achieved by
   injecting functions (e.g. `pingerFn`, `queryFn`, `interfaceCollector`).
 
@@ -84,6 +87,8 @@ adding/removing targets.
 * Only two environment variables: `CONFIG_PATH` (default `/config.yaml`) and
   `LOG_LEVEL` (default `WARN`). No CLI flags.
 * Config file is YAML or JSON; parsed/validated by `config.NewFromFile`.
+* The `engine` field is a required BGP-engine selector: `gobgpv3` or `gobgpv4`
+  (no default).
 * Peer `remote_address` validation (`isSessionAddress`) rejects IPv6 link-local
   addresses, zone-scoped addresses, and IPv4-mapped IPv6 addresses.
 * IPv4 routes require an IPv4 peer; IPv6 routes require an IPv6 peer.

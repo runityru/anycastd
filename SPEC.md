@@ -9,8 +9,9 @@ when a service on a node is healthy, its prefixes are announced to configured
 BGP peers; when the service becomes unhealthy, the prefixes are withdrawn so
 traffic is steered to another node.
 
-The daemon is written in Go and uses [GoBGP v3](https://github.com/osrg/gobgp)
-as its embedded BGP engine. The module path is `github.com/runityru/anycastd`.
+The daemon is written in Go and uses [GoBGP](https://github.com/osrg/gobgp)
+(v3 or v4, selectable via the config `engine` field) as its embedded BGP
+engine. The module path is `github.com/runityru/anycastd`.
 
 ### Goals
 
@@ -40,6 +41,7 @@ packages.
 |  announcer  |       |  checkers   |       |   service    |
 |  (BGP)      |       |  (health)   |       |  (orchestr.) |
 |  + gobgpv3  |       |  registry   |       |  metrics     |
+|  + gobgpv4  |       |             |       |              |
 +-------------+       +-------------+       +--------------+
 ```
 
@@ -48,7 +50,8 @@ packages.
 * **`cmd/anycastd`** — entry point. Reads environment variables, loads and
   validates the configuration file, builds the engine-agnostic
   `announcer.DriverSpec` from the announcer config, constructs and starts the
-  GoBGP v3 driver (`gobgpv3.NewDriver` + `Serve`/`Start`), builds one
+  BGP driver selected by the config `engine` field via `newGoBGPDriver`
+  (`gobgpv3.NewDriver` or `gobgpv4.NewDriver` + `Serve`/`Start`), builds one
   `service.Service` per configured service, and (optionally) starts the metrics
   HTTP server and the GoBGP metrics poller.
 * **`announcer`** — defines the version-agnostic contracts (`Driver`,
@@ -60,6 +63,9 @@ packages.
   `announcer.Driver`. Exports `NewDriver`, `NewAdapter`, and
   `NewPeerStateSource`, wrapping a `*server.BgpServer` and isolating all
   GoBGP-specific types behind the version-agnostic contracts.
+* **`announcer/gobgpv4`** — the GoBGP v4 adapter. The same version-agnostic
+  `announcer.Driver` contract implemented over a GoBGP v4 `*server.BgpServer`.
+  Both engines coexist in the one binary, selected by the config `engine` field.
 * **`checkers`** — a registry of health check implementations, keyed by
   `kind`, with `Register` / `MustRegister` / `NewCheckerByKind`. Each checker
   implements the `Checker` interface.
@@ -94,7 +100,7 @@ Top-level structure:
 
 ```yaml
 announcer:
-  engine: gobgpv3 # required, "gobgpv3" (the only supported backend engine); no default
+  engine: gobgpv3 # required, "gobgpv3" or "gobgpv4"; no default
   router_id: 10.3.3.3 # required, IPv4
   local_address: 10.0.0.1 # optional, IPv4
   local_address6: 2001:db8::1 # optional, IPv6
@@ -124,7 +130,7 @@ metrics:
 
 | Field            | Type       | Required | Validation                                                                                  |
 | ---------------- | ---------- | -------- | ------------------------------------------------------------------------------------------- |
-| `engine`         | `string`   | yes      | Required, no default. Only `gobgpv3` is supported; any other value is a config error        |
+| `engine`         | `string`   | yes      | Required, no default. `gobgpv3` or `gobgpv4`; any other value is a config error             |
 | `router_id`      | `string`   | yes      | IPv4 address                                                                                |
 | `local_address`  | `string`   | no       | IPv4, must be a valid _session_ address (see below)                                         |
 | `local_address6` | `string`   | no       | IPv6, must be a valid _session_ address (see below)                                         |
@@ -133,12 +139,11 @@ metrics:
 | `peers`          | `[]Peer`   | yes      | At least one peer; multihop peers need a local address                                      |
 
 > **Breaking schema change (deliberate).** The `engine` field is **required** and
-> has **no default** — omitting it, or setting any value other than `gobgpv3`,
-> is a config error (fail-closed); there is no implicit fallback engine. The
-> field is a **selector** for the BGP backend so that other backends can be
-> added later without breaking the config schema. As of this change **only
-> `gobgpv3` is implemented and supported**; the daemon refuses to start with any
-> other value (see §4.1).
+> has **no default** — omitting it, or setting any value other than `gobgpv3` or
+> `gobgpv4`, is a config error (fail-closed); there is no implicit fallback
+> engine. The field is a **selector** for the BGP backend. Both the GoBGP v3 and
+> GoBGP v4 backends are implemented and supported; the daemon refuses to start
+> with any other value (see §4.1).
 
 **Session-address validation** (`isSessionAddress`): the address must be a
 valid IP, must **not** be an IPv6 link-local address, must **not** carry a
@@ -208,34 +213,31 @@ _service is down_):
 
 1. Register a signal context for `SIGINT` / `SIGTERM`.
 2. Read `CONFIG_PATH` / `LOG_LEVEL` via `envconfig.MustProcess`.
-3. Load and validate the configuration (`config.NewFromFile`). The `engine`
-   selector is enforced **here**: validation restricts it to `gobgpv3` (the only
-   supported backend), and `main` hard-uses the GoBGP v3 driver — there is no
-   separate startup-time guard.
-4. Configure logrus (level + `TextFormatter{FullTimestamp: true}`).
-5. Create an `errgroup` with the signal context.
-6. Build the engine-agnostic `announcer.DriverSpec` via `driverSpec(cfg.Announcer)`,
-   resolving each peer's `LocalAddress` with `cfg.Announcer.LocalAddressFor`.
-7. Construct the driver with `gobgpv3.NewDriver(dspec, logger)` (construction
-   only — no BGP wiring yet).
-8. Run `driver.Serve()` in the errgroup. GoBGP's `StartBgp` / `WatchEvent` block
-   until `Serve` runs, so `Serve` must be running before `Start`.
-9. Start BGP with `driver.Start(ctx, dspec)`: it calls `StartBgp` with
+3. Load and validate the configuration (`config.NewFromFile`).
+4. **Engine selector:** `cfg.Announcer.Engine` selects the GoBGP backend —
+   `gobgpv3` or `gobgpv4`. `newGoBGPDriver(engine, spec, *log.Logger)` returns
+   the matching driver or aborts on an unknown engine. Config validation already
+   restricts the selector to those two values, so the check is defense-in-depth.
+5. Configure logrus (level + `TextFormatter{FullTimestamp: true}`).
+6. Create an `errgroup` with the signal context.
+7. Create the selected driver via `newGoBGPDriver` and run `driver.Serve()` in
+   the errgroup.
+8. `driver.Start(ctx, spec)` — starts the global instance with the configured
    `RouterId`, `Asn`, and `ListenPort: -1` (the embedded gRPC server does not
-   listen on an external port), registers peer-`STATE` `WatchEvent` logging, and
-   applies `spec.Peers` via `AddPeer` per peer.
-10. For each service:
-    * build checkers from the registry,
-    * create an `announcer.New` with the driver (satisfying `BGPServer`) and the
-      configured routes,
-    * resolve the strategy,
-    * create and run a `service.New(...)` in the errgroup.
-11. If metrics are enabled:
+   listen on an external port), registers peer-state logging, and applies each
+   configured peer.
+9. For each service:
+   * build checkers from the registry,
+   * create an `announcer.New` with the driver (a `BGPServer`) and the
+     configured routes,
+   * resolve the strategy,
+   * create and run a `service.New(...)` in the errgroup.
+10. If metrics are enabled:
     * register the Prometheus handler and
       `http.ListenAndServe(metrics.address, nil)`,
-    * create and run `announcer.NewMetricsRepository(driver, routerID, ...)`
-      (GoBGP metrics poller).
-12. `g.Wait()` — block until the context is cancelled or a goroutine errors.
+    * create and run `announcer.NewMetricsRepository(driver, ...)` (GoBGP
+      metrics poller, reading peer state through the driver's `PeerStateSource`).
+11. `g.Wait()` — block until the context is cancelled or a goroutine errors.
 
 ### 4.2 Announce / denounce lifecycle (service)
 
@@ -297,6 +299,40 @@ GoBGP `api.Peer` from an `announcer.PeerSpec` with:
   `Announcer.LocalAddressFor`).
 * `Timers.Config{ConnectRetry: 5}` — GoBGP's default 120 s retry is too slow
   for a tentative IPv6 bind waiting for duplicate-address detection (DAD).
+
+### 5.1 BGP Behavior (gobgpv4 adapter)
+
+`gobgpv4.NewAdapter(*server.BgpServer)` returns an `announcer.BGPServer` with
+the same semantics as v3, over GoBGP v4's native (`apiutil.Path`) API:
+
+* **AddPath** builds a `apiutil.Path` with `Family` set to `bgp.RF_IPv4_UC` or
+  `bgp.RF_IPv6_UC` (GoBGP v4 requires an explicit family), a `bgp.NewIPAddrPrefix`
+  NLRI, and the attributes `NewPathAttributeOrigin(0)` plus
+  `NewPathAttributeNextHop(0.0.0.0)` / `(::)` for the unspecified next hop. It
+  returns `resp[0].Error` when the server reports an error for the path.
+* **DeletePath** builds a `apiutil.Path` with `Withdrawal: true` and **no**
+  next-hop attribute. GoBGP v4 requires `Withdrawal` to be set on a delete
+  (otherwise it rejects the path with `nexthop not found`), and a withdrawal
+  path must not carry the next-hop attribute.
+* **Peer state** (`gobgpv4.NewPeerStateSource(srv, *log.Logger)`) maps v4
+  `*api.Peer` → `announcer.PeerState`, **normalizing `AdminState` and `Type`**
+  because v4 reserves 0 for `UNSPECIFIED` and numbers `UP=1, DOWN=2, PFX_CT=3`
+  for `AdminState` and `INTERNAL=1, EXTERNAL=2` for `Type`, whereas the
+  engine-agnostic encoding is 0=up, 1=down, 2=pfx_ct (unknown → 0/up) for
+  `AdminState` and 0=internal, 1=external (unknown → 0/internal) for `Type`.
+  As in v3, `ListPeers` logs and **skips a single peer that fails to map**
+  rather than failing the whole call, so one bad peer does not freeze the
+  metrics for the remaining peers.
+* **Driver** (`gobgpv4.NewDriver(spec, *log.Logger)`) mirrors the v3 driver:
+  `Serve` / `Start` (start global, `WatchEvent` with
+  `WatchEventMessageCallbacks{OnPeerUpdate}` + `server.WatchPeer()`, logging on
+  `PEER_EVENT_STATE`, then apply peers) / `Stop` / `AddPeer`. It takes the same
+  logrus `*log.Logger` as v3 and bridges it onto GoBGP v4's `*slog.Logger`
+  (`server.LoggerOption`).
+
+Both engines implement the identical engine-agnostic `announcer.Driver`
+and are selected by the config `engine` field; v3 and v4 link into the same
+binary (see the coexist test).
 
 ## 6. Checkers
 
@@ -470,6 +506,7 @@ The security posture is **honest and limited by design**:
 * `go 1.27.2`
 * Key dependencies:
   * `github.com/osrg/gobgp/v3 v3.37.0`
+  * `github.com/osrg/gobgp/v4 v4.11.0`
   * `github.com/prometheus/client_golang v1.25.0`
   * `github.com/sirupsen/logrus v1.10.2`
   * `github.com/kelseyhightower/envconfig v1.4.0`

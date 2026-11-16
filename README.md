@@ -53,7 +53,7 @@ for the same data structure are supported. Example:
 ```yaml
 ---
 announcer:
-  engine: gobgpv3
+  engine: gobgpv3 # BGP engine: "gobgpv3" or "gobgpv4"
   router_id: 10.3.3.3
   local_address: 10.0.0.1
   local_address6: 2001:db8::1
@@ -159,85 +159,85 @@ systems to notify operators about any changes in their service.
 
 For now anycastd provides the following metrics:
 
-| Metric name | Labels  | Description                                    |
-| ----------- | ------- | ---------------------------------------------- |
-| anycastd_up | version | Application liveness status (must always be 1) |
+| Metric name | Labels  | Type  | Description                                    |
+| ----------- | ------- | ----- | ---------------------------------------------- |
+| anycastd_up | version | gauge | Application liveness status (must always be 1) |
 
 ### Service
 
 Service could provide their metrics in order to aggregate current statuses.
 
-| Metric name         | Labels  | Description                             |
-| ------------------- | ------- | --------------------------------------- |
-| anycastd_service_up | service | Service liveness status based on checks |
+| Metric name         | Labels  | Type  | Description                             |
+| ------------------- | ------- | ----- | --------------------------------------- |
+| anycastd_service_up | service | gauge | Service liveness status based on checks |
 
 ### Checks
 
 Check running engine provides the following metrics.
 
-| Metric name                     | Labels         | Description                            |
-| ------------------------------- | -------------- | -------------------------------------- |
-| anycastd_check_duration_seconds | service, check | Duration of check execution in seconds |
+| Metric name                     | Labels         | Type  | Description                            |
+| ------------------------------- | -------------- | ----- | -------------------------------------- |
+| anycastd_check_duration_seconds | service, check | gauge | Duration of check execution in seconds |
 
 In addition some checkers could provide their own metrics the list of them is below:
 
 #### tls_certificate check
 
-| Metric name                             | Labels      | Description                                  |
-| --------------------------------------- | ----------- | -------------------------------------------- |
-| anycastd_certificate_expires_in_seconds | check, path | Time the certificate expires in (in seconds) |
+| Metric name                             | Labels      | Type  | Description                                  |
+| --------------------------------------- | ----------- | ----- | -------------------------------------------- |
+| anycastd_certificate_expires_in_seconds | check, path | gauge | Time the certificate expires in (in seconds) |
 
 #### icmp_ping check
 
-| Metric name                                      | Labels      | Description                                |
-| ------------------------------------------------ | ----------- | ------------------------------------------ |
-| anycastd_check_avg_rtt_seconds                   | check, host | Avg RTT of ICMP checks                     |
-| anycastd_check_loss_percent                      | check, host | Percent of packet loss                     |
-| anycastd_check_max_rtt_seconds                   | check, host | Max RTT of ICMP checks                     |
-| anycastd_check_min_rtt_seconds                   | check, host | Min RTT of ICMP checks                     |
-| anycastd_check_packets_received_duplicates_total | check, host | Total amount of duplicate packets received |
-| anycastd_check_packets_received_total            | check, host | Total amount of packets received           |
-| anycastd_check_packets_sent_total                | check, host | Total amount of packets sent               |
-| anycastd_check_std_dev_rtt_seconds               | check, host | Standard deviation RTT of ICMP checks      |
+| Metric name                                      | Labels      | Type    | Description                                |
+| ------------------------------------------------ | ----------- | ------- | ------------------------------------------ |
+| anycastd_check_avg_rtt_seconds                   | check, host | gauge   | Avg RTT of ICMP checks                     |
+| anycastd_check_loss_percent                      | check, host | gauge   | Percent of packet loss                     |
+| anycastd_check_max_rtt_seconds                   | check, host | gauge   | Max RTT of ICMP checks                     |
+| anycastd_check_min_rtt_seconds                   | check, host | gauge   | Min RTT of ICMP checks                     |
+| anycastd_check_packets_received_duplicates_total | check, host | counter | Total amount of duplicate packets received |
+| anycastd_check_packets_received_total            | check, host | counter | Total amount of packets received           |
+| anycastd_check_packets_sent_total                | check, host | counter | Total amount of packets sent               |
+| anycastd_check_std_dev_rtt_seconds               | check, host | gauge   | Standard deviation RTT of ICMP checks      |
 
 #### ntpq check
 
-| Metric name                            | Labels                | Description                                                                   |
-| -------------------------------------- | --------------------- | ----------------------------------------------------------------------------- |
-| anycastd_check_last_ntp_offset_seconds | check, host, src_addr | The estimated offset of the local system clock relative to the server's clock |
-| anycastd_check_last_ntp_rtt_seconds    | check, host, src_addr | An estimate of the round-trip-time delay between the client and the server    |
-| anycastd_check_ntp_packets_sent_total  | check, host, src_addr | Total amount of ntp packets sent                                              |
-| anycastd_check_ntp_unverified_total    | check, host, src_addr | Total amount of checks that could not verify the local clock                  |
+| Metric name                            | Labels                | Type    | Description                                                                   |
+| -------------------------------------- | --------------------- | ------- | ----------------------------------------------------------------------------- |
+| anycastd_check_last_ntp_offset_seconds | check, host, src_addr | gauge   | The estimated offset of the local system clock relative to the server's clock |
+| anycastd_check_last_ntp_rtt_seconds    | check, host, src_addr | gauge   | An estimate of the round-trip-time delay between the client and the server    |
+| anycastd_check_ntp_packets_sent_total  | check, host, src_addr | counter | Total amount of ntp packets sent                                              |
+| anycastd_check_ntp_unverified_total    | check, host, src_addr | counter | Total amount of checks that could not verify the local clock                  |
 
 ### GoBGP
 
 The core of anycastd for BGP communication is GoBGP which allows so gather
 some details about peers, sessions and announces.
 
-| Metric name                                      | Labels          | Description                                                                                         |
-| ------------------------------------------------ | --------------- | --------------------------------------------------------------------------------------------------- |
-| anycastd_gobgp_peer_admin_state                  | router_id, peer | Peer state 0=up, 1=down, 2=pfx_ct                                                                   |
-| anycastd_gobgp_peer_count                        | router_id       | Total amount of peers configured for the GoBGP instance                                             |
-| anycastd_gobgp_peer_flops_count                  | router_id, peer | Peer flops count                                                                                    |
-| anycastd_gobgp_peer_out_queue_count              | router_id, peer | Peer outgoing messages queue                                                                        |
-| anycastd_gobgp_peer_password_set_flag            | router_id, peer | Whether the peer have peer password set flag set                                                    |
-| anycastd_gobgp_peer_remove_private_flag          | router_id, peer | Whether the peer have remove private flag set                                                       |
-| anycastd_gobgp_peer_send_community_flag          | router_id, peer | Whether the peer have send community flag set                                                       |
-| anycastd_gobgp_peer_session_state                | router_id, peer | Peer session state 0=unknown, 1=idle, 2=connect, 3=active, 4=opensent, 5=openconfirm, 6=established |
-| anycastd_gobgp_peer_type                         | router_id, peer | Peer type 0=internal, 1=external                                                                    |
-| anycastd_gobgp_received_messages_keepalive       | router_id, peer | Number of Keepalive messages received from the peer                                                 |
-| anycastd_gobgp_received_messages_notification    | router_id, peer | Number of Notification messages received from the peer                                              |
-| anycastd_gobgp_received_messages_open            | router_id, peer | Number of Open messages received from the peer                                                      |
-| anycastd_gobgp_received_messages_refresh         | router_id, peer | Number of Refresh messages received from the peer                                                   |
-| anycastd_gobgp_received_messages_total           | router_id, peer | Total number of messages received from the peer                                                     |
-| anycastd_gobgp_received_messages_update          | router_id, peer | Number of Update messages received from the peer                                                    |
-| anycastd_gobgp_received_messages_withdraw_update | router_id, peer | Number of Withdraw Update messages received from the peer                                           |
-| anycastd_gobgp_received_messages_withdraw_prefix | router_id, peer | Number of Withdraw Prefix messages received from the peer                                           |
-| anycastd_gobgp_sent_messages_keepalive           | router_id, peer | Number of Keepalive messages sent to the peer                                                       |
-| anycastd_gobgp_sent_messages_notification        | router_id, peer | Number of Notification messages sent to the peer                                                    |
-| anycastd_gobgp_sent_messages_open                | router_id, peer | Number of Open messages sent to the peer                                                            |
-| anycastd_gobgp_sent_messages_refresh             | router_id, peer | Number of Refresh messages sent to the peer                                                         |
-| anycastd_gobgp_sent_messages_total               | router_id, peer | Total number of messages sent to the peer                                                           |
-| anycastd_gobgp_sent_messages_update              | router_id, peer | Number of Update messages sent to the peer                                                          |
-| anycastd_gobgp_sent_messages_withdraw_prefix     | router_id, peer | Number of Withdraw Prefix messages sent to the peer                                                 |
-| anycastd_gobgp_sent_messages_withdraw_update     | router_id, peer | Number of Withdraw Update messages sent to the peer                                                 |
+| Metric name                                      | Labels          | Type  | Description                                                                                         |
+| ------------------------------------------------ | --------------- | ----- | --------------------------------------------------------------------------------------------------- |
+| anycastd_gobgp_peer_admin_state                  | router_id, peer | gauge | Peer state 0=up, 1=down, 2=pfx_ct                                                                   |
+| anycastd_gobgp_peer_count                        | router_id       | gauge | Total amount of peers configured for the GoBGP instance                                             |
+| anycastd_gobgp_peer_flops_count                  | router_id, peer | gauge | Peer flops count                                                                                    |
+| anycastd_gobgp_peer_out_queue_count              | router_id, peer | gauge | Peer outgoing messages queue                                                                        |
+| anycastd_gobgp_peer_password_set_flag            | router_id, peer | gauge | Whether the peer have peer password set flag set                                                    |
+| anycastd_gobgp_peer_remove_private_flag          | router_id, peer | gauge | Whether the peer have remove private flag set                                                       |
+| anycastd_gobgp_peer_send_community_flag          | router_id, peer | gauge | Whether the peer have send community flag set                                                       |
+| anycastd_gobgp_peer_session_state                | router_id, peer | gauge | Peer session state 0=unknown, 1=idle, 2=connect, 3=active, 4=opensent, 5=openconfirm, 6=established |
+| anycastd_gobgp_peer_type                         | router_id, peer | gauge | Peer type 0=internal, 1=external                                                                    |
+| anycastd_gobgp_received_messages_keepalive       | router_id, peer | gauge | Number of Keepalive messages received from the peer                                                 |
+| anycastd_gobgp_received_messages_notification    | router_id, peer | gauge | Number of Notification messages received from the peer                                              |
+| anycastd_gobgp_received_messages_open            | router_id, peer | gauge | Number of Open messages received from the peer                                                      |
+| anycastd_gobgp_received_messages_refresh         | router_id, peer | gauge | Number of Refresh messages received from the peer                                                   |
+| anycastd_gobgp_received_messages_total           | router_id, peer | gauge | Total number of messages received from the peer                                                     |
+| anycastd_gobgp_received_messages_update          | router_id, peer | gauge | Number of Update messages received from the peer                                                    |
+| anycastd_gobgp_received_messages_withdraw_update | router_id, peer | gauge | Number of Withdraw Update messages received from the peer                                           |
+| anycastd_gobgp_received_messages_withdraw_prefix | router_id, peer | gauge | Number of Withdraw Prefix messages received from the peer                                           |
+| anycastd_gobgp_sent_messages_keepalive           | router_id, peer | gauge | Number of Keepalive messages sent to the peer                                                       |
+| anycastd_gobgp_sent_messages_notification        | router_id, peer | gauge | Number of Notification messages sent to the peer                                                    |
+| anycastd_gobgp_sent_messages_open                | router_id, peer | gauge | Number of Open messages sent to the peer                                                            |
+| anycastd_gobgp_sent_messages_refresh             | router_id, peer | gauge | Number of Refresh messages sent to the peer                                                         |
+| anycastd_gobgp_sent_messages_total               | router_id, peer | gauge | Total number of messages sent to the peer                                                           |
+| anycastd_gobgp_sent_messages_update              | router_id, peer | gauge | Number of Update messages sent to the peer                                                          |
+| anycastd_gobgp_sent_messages_withdraw_prefix     | router_id, peer | gauge | Number of Withdraw Prefix messages sent to the peer                                                 |
+| anycastd_gobgp_sent_messages_withdraw_update     | router_id, peer | gauge | Number of Withdraw Update messages sent to the peer                                                 |

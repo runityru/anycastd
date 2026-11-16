@@ -36,6 +36,8 @@ components:
     in: announcer
   announcer/gobgpv3:
     in: announcer/gobgpv3
+  announcer/gobgpv4:
+    in: announcer/gobgpv4
   checkers:
     in: checkers
   checkers/assigned_address:
@@ -66,6 +68,11 @@ deps:
 
   # The GoBGP v3 adapter implements the announcer interfaces.
   announcer/gobgpv3:
+    mayDependOn:
+      - announcer
+
+  # The GoBGP v4 adapter implements the announcer interfaces.
+  announcer/gobgpv4:
     mayDependOn:
       - announcer
 

@@ -109,7 +109,7 @@ func (d *driver) AddPeer(ctx context.Context, peer announcer.PeerSpec) error {
 // the kernel route-lookup source when that is unset. AfiSafis stays empty, so
 // GoBGP enables only the family of the peer's address.
 func newPeer(peer announcer.PeerSpec) *apipb.Peer {
-	return &apipb.Peer{
+	p := &apipb.Peer{
 		Conf: &apipb.PeerConf{
 			NeighborAddress: peer.RemoteAddress,
 			PeerAsn:         peer.RemoteASN,
@@ -125,4 +125,12 @@ func newPeer(peer announcer.PeerSpec) *apipb.Peer {
 		// GoBGP's default retry is 120 s.
 		Timers: &apipb.Timers{Config: &apipb.TimersConfig{ConnectRetry: 5}},
 	}
+
+	// A non-zero RemotePort overrides the BGP default of 179 (used for tests
+	// against a peer on an ephemeral port, and for non-standard session ports).
+	if peer.RemotePort != 0 {
+		p.Transport.RemotePort = peer.RemotePort
+	}
+
+	return p
 }

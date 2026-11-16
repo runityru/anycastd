@@ -63,6 +63,7 @@ func TestNewPeer(t *testing.T) {
 		name            string
 		peer            announcer.PeerSpec
 		expLocalAddress string
+		expRemotePort   uint32
 	}{
 		{
 			name: "IPv4 peer",
@@ -87,6 +88,25 @@ func TestNewPeer(t *testing.T) {
 				EnableMultihop: true, MultihopTTL: 2,
 			},
 		},
+		{
+			name: "non-zero remote_port",
+			peer: announcer.PeerSpec{
+				Name: "test-peer", RemoteAddress: "10.0.0.1", RemoteASN: 65000,
+				EnableMultihop: true, MultihopTTL: 2,
+				LocalAddress: "10.0.0.2", RemotePort: 45678,
+			},
+			expLocalAddress: "10.0.0.2",
+			expRemotePort:   45678,
+		},
+		{
+			name: "zero remote_port leaves default 179",
+			peer: announcer.PeerSpec{
+				Name: "test-peer", RemoteAddress: "10.0.0.1", RemoteASN: 65000,
+				EnableMultihop: true, MultihopTTL: 2,
+				LocalAddress: "10.0.0.2", RemotePort: 0,
+			},
+			expLocalAddress: "10.0.0.2",
+		},
 	}
 
 	for _, tc := range tcs {
@@ -101,6 +121,7 @@ func TestNewPeer(t *testing.T) {
 			r.Equal(uint32(2), p.EbgpMultihop.MultihopTtl)
 			r.NotNil(p.Transport)
 			r.Equal(tc.expLocalAddress, p.Transport.LocalAddress)
+			r.Equal(tc.expRemotePort, p.Transport.RemotePort)
 			r.Equal(uint64(5), p.Timers.Config.ConnectRetry)
 			r.Nil(p.Bfd)
 		})

@@ -133,6 +133,12 @@ func newPeer(peer announcer.PeerSpec, bfd announcer.BfdSpec) *api.Peer {
 		Timers: &api.Timers{Config: &api.TimersConfig{ConnectRetry: 5}},
 	}
 
+	// A non-zero RemotePort overrides the BGP default of 179 (used for tests
+	// against a peer on an ephemeral port, and for non-standard session ports).
+	if peer.RemotePort != 0 {
+		p.Transport.RemotePort = peer.RemotePort
+	}
+
 	if !bfd.Enabled {
 		return p
 	}

@@ -38,6 +38,11 @@ type PeerSpec struct {
 	EnableMultihop bool
 	MultihopTTL    uint32
 	LocalAddress   string
+	// RemotePort is the TCP port the engine dials on the peer. 0 (the zero
+	// value) means the BGP default of 179. It is useful for testing against a
+	// peer listening on an ephemeral port, and is a legitimate BGP feature for
+	// non-standard session ports.
+	RemotePort uint32
 }
 
 // MessageCounter counts messages exchanged with a peer.

@@ -379,6 +379,9 @@ session state). Multihop mode is derived automatically from
 * **Behavior on BFD-down**: GoBGP performs a hard reset of the peer whose BFD
   session went down. The prefix is simply not delivered to that peer; all other
   peers keep receiving it. anycastd does **not** withdraw the announcement.
+* **Peer local address**: a BFD session can only be established when the peer
+  has a valid local address at `AddPeer` time, so operators enabling BFD should
+  set the peer's `local_address` (IPv4) / `local_address6` (IPv6) explicitly.
 * **Units**: config uses milliseconds (`300ms`); GoBGP/the wire use microseconds
   per RFC 5880. Local detection time = `min_rx_interval × multiplier`.
 * **Root is not required**: BFD uses UDP ports `3784` (single-hop) / `4784`

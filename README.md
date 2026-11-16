@@ -159,6 +159,10 @@ automatically from `peer.enable_multihop`) BFD runs in multihop mode.
 Multihop is **not** configured inside `bfd` — it is derived from the peer's
 `enable_multihop` automatically.
 
+**Peer local address**: a BFD session can only be established when the peer has
+a valid local address at `AddPeer` time. Operators enabling BFD should therefore
+set the peer's `local_address` (IPv4) / `local_address6` (IPv6) explicitly.
+
 **Units**: configuration values are durations expressed in milliseconds (e.g.
 `300ms`); on the wire and in the GoBGP API BFD uses **microseconds**
 (RFC 5880). Local detection time = `min_rx_interval × multiplier`

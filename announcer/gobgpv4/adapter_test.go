@@ -1,7 +1,6 @@
 package gobgpv4
 
 import (
-	"context"
 	"net"
 	"testing"
 	"time"
@@ -35,7 +34,7 @@ func TestAddDeletePath(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			r := require.New(t)
-			ctx := context.Background()
+			ctx := t.Context()
 
 			srv := server.NewBgpServer()
 			go srv.Serve()

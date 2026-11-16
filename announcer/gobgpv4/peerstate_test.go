@@ -1,7 +1,6 @@
 package gobgpv4
 
 import (
-	"context"
 	"io"
 	"net"
 	"testing"
@@ -20,7 +19,7 @@ import (
 // in-process GoBGP server pair, mirroring the adapter test setup.
 func TestPeerStateSource(t *testing.T) {
 	r := require.New(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	srv := server.NewBgpServer()
 	go srv.Serve()

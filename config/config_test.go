@@ -273,6 +273,11 @@ func TestBfdValidation(t *testing.T) {
 	r.Error((Bfd{Enabled: true, Multiplier: uint32ptr(0)}).Validate())
 	r.NoError((Bfd{Enabled: true, Multiplier: uint32ptr(1)}).Validate())
 
+	// Enabled BFD caps the detection multiplier at 255 (RFC 5880 8-bit field;
+	// GoBGP silently truncates larger values).
+	r.NoError((Bfd{Enabled: true, Multiplier: uint32ptr(255)}).Validate())
+	r.Error((Bfd{Enabled: true, Multiplier: uint32ptr(256)}).Validate())
+
 	// Omitted pointers are valid when enabled (engine applies its default).
 	r.NoError((Bfd{Enabled: true}).Validate())
 }

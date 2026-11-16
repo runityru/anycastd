@@ -98,7 +98,9 @@ func (b Bfd) Validate() error {
 				validation.Min(th.Millisecond).ValidateEmpty(),
 				validation.Max(maxBfdInterval).ValidateEmpty())),
 		validation.Field(&b.Multiplier,
-			validation.When(b.Enabled, validation.Min(uint32(1)).ValidateEmpty())),
+			validation.When(b.Enabled,
+				validation.Min(uint32(1)).ValidateEmpty(),
+				validation.Max(uint32(255)).ValidateEmpty())),
 	)
 }
 

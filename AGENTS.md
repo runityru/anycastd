@@ -96,10 +96,15 @@ adding/removing targets.
   (`local_address` for IPv4, `local_address6` for IPv6).
 * `LocalAddressFor(peer)` returns `""` for an unset/unspecified local address,
   letting GoBGP use the kernel route-lookup source.
+* `announcer.bfd` (per-announcer) enables BFD to each peer. **GoBGP v4 only**;
+  `enabled: true` with `engine: gobgpv3` is a config error (fail-closed).
+  Multihop mode is derived from `peer.enable_multihop` (not set inside `bfd`).
 
 ## Security constraints (do not silently change)
 
 * Peer authentication is **not** supported (no password/MD5/TLS in `config.Peer`).
+* BFD (when enabled) uses UDP `3784` (single-hop) / `4784` (multihop) and is
+  **not authenticated** (like BGP). No root is required (ports `> 1024`).
 * The metrics endpoint has **no TLS/auth/timeouts**
   (`http.ListenAndServe(addr, nil)`).
 * GoBGP is started with `ListenPort: -1` (no external gRPC listener).

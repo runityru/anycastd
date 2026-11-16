@@ -53,6 +53,13 @@ func driverSpec(a config.Announcer) announcer.DriverSpec {
 		RouterID: a.RouterID,
 		LocalASN: a.LocalASN,
 		Peers:    peers,
+		Bfd: announcer.BfdSpec{
+			Enabled:              a.Bfd.Enabled,
+			Port:                 a.Bfd.Port,
+			DesiredMinTxInterval: a.Bfd.MinTxInterval,
+			RequiredMinReceive:   a.Bfd.MinRxInterval,
+			DetectionMultiplier:  a.Bfd.Multiplier,
+		},
 	}
 }
 

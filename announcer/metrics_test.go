@@ -34,6 +34,8 @@ func peer(neighbor string, passwordSet bool) PeerState {
 		SendCommunity:   4,
 		RemovePrivate:   5,
 		PasswordSet:     passwordSet,
+		BfdEnabled:      true,
+		BfdState:        1,
 		Received: MessageCounter{
 			Total: 11, Notification: 12, Update: 13, Open: 14, Keepalive: 15,
 			Refresh: 16, WithdrawUpdate: 17, WithdrawPrefix: 18,
@@ -59,7 +61,7 @@ func newTestMetrics(t *testing.T, src PeerStateSource) *metrics {
 	return m
 }
 
-// TestMetricsRepositoryAllGauges asserts that every one of the 25 gauges is
+// TestMetricsRepositoryAllGauges asserts that every one of the 26 gauges is
 // populated from the correct PeerState field. The repository registers into a
 // fresh, hermetic registry and collect() runs synchronously for determinism.
 func TestMetricsRepositoryAllGauges(t *testing.T) {
@@ -79,6 +81,7 @@ func TestMetricsRepositoryAllGauges(t *testing.T) {
 
 		{"peer_admin_state", func() prometheus.Collector { return m.peerAdminState }, 0},
 		{"peer_session_state", func() prometheus.Collector { return m.peerSessionState }, 6},
+		{"peer_bfd_state", func() prometheus.Collector { return m.peerBfdState }, 1},
 		{"peer_out_queue_count", func() prometheus.Collector { return m.bgpPeerOutQueueCount }, 2},
 		{"peer_flops_count", func() prometheus.Collector { return m.bgpPeerFlopsCount }, 3},
 		{"peer_send_community_flag", func() prometheus.Collector { return m.bgpPeerSendCommunityFlag }, 4},
@@ -105,7 +108,7 @@ func TestMetricsRepositoryAllGauges(t *testing.T) {
 		{"sent_messages_withdraw_prefix", func() prometheus.Collector { return m.sentMessagesWithdrawPrefix }, 28},
 	}
 
-	r.Len(cases, 25, "must assert exactly 25 gauges")
+	r.Len(cases, 26, "must assert exactly 26 gauges")
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			require.Equal(t, c.want, testutil.ToFloat64(c.metric()))
@@ -123,4 +126,34 @@ func TestMetricsRepositoryPasswordUnset(t *testing.T) {
 	m.collect(context.Background())
 
 	r.Equal(float64(0), testutil.ToFloat64(m.bgpPeerPasswordSetFlag.WithLabelValues("10.9.9.9", "10.0.0.2")))
+}
+
+// TestMetricsRepositoryBfdDisabled asserts that a peer without BFD enabled gets
+// no peer_bfd_state series (the gauge reads 0), matching the documented
+// "present only when BFD is enabled" semantics.
+func TestMetricsRepositoryBfdDisabled(t *testing.T) {
+	r := require.New(t)
+
+	p := peer("10.0.0.3", false)
+	p.BfdEnabled = false
+	m := newTestMetrics(t, &fakePeerStateSource{states: []PeerState{p}})
+
+	m.collect(context.Background())
+
+	r.Equal(float64(0), testutil.ToFloat64(m.peerBfdState.WithLabelValues("10.9.9.9", "10.0.0.3")))
+}
+
+// TestMetricsRepositoryBfdDown asserts a peer with BFD enabled but a DOWN
+// session reports 0.
+func TestMetricsRepositoryBfdDown(t *testing.T) {
+	r := require.New(t)
+
+	p := peer("10.0.0.4", false)
+	p.BfdEnabled = true
+	p.BfdState = 0
+	m := newTestMetrics(t, &fakePeerStateSource{states: []PeerState{p}})
+
+	m.collect(context.Background())
+
+	r.Equal(float64(0), testutil.ToFloat64(m.peerBfdState.WithLabelValues("10.9.9.9", "10.0.0.4")))
 }

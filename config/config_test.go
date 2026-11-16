@@ -220,3 +220,75 @@ func TestEmptyAnnouncerOnlyConfig(t *testing.T) {
 	_, err := NewFromFile("testdata/empty_with_announcer.yaml")
 	r.NoError(err)
 }
+
+func TestBfdConfig(t *testing.T) {
+	r := require.New(t)
+
+	t.Run("enabled with gobgpv4 parses intervals as durations", func(t *testing.T) {
+		cfg, err := NewFromFile("testdata/bfd_gobgpv4.yaml")
+		r.NoError(err)
+
+		bfd := cfg.Announcer.Bfd
+		r.True(bfd.Enabled)
+		r.Equal(uint16(3784), *bfd.Port)
+		r.Equal(th.Duration(300*time.Millisecond), *bfd.MinTxInterval)
+		r.Equal(th.Duration(300*time.Millisecond), *bfd.MinRxInterval)
+		r.Equal(uint32(3), *bfd.Multiplier)
+	})
+
+	t.Run("enabled with gobgpv3 fails closed", func(t *testing.T) {
+		_, err := NewFromFile("testdata/bfd_gobgpv3.yaml")
+		r.Error(err)
+		r.Contains(err.Error(), "requires engine gobgpv4")
+	})
+}
+
+func TestBfdValidation(t *testing.T) {
+	r := require.New(t)
+
+	// Disabled BFD accepts any values (thresholds are only enforced when enabled).
+	r.NoError((Bfd{Enabled: false, Port: uint16ptr(0), Multiplier: uint32ptr(0)}).Validate())
+
+	// Enabled BFD rejects an out-of-range port.
+	r.Error((Bfd{Enabled: true, Port: uint16ptr(0)}).Validate())
+	r.NoError((Bfd{Enabled: true, Port: uint16ptr(1)}).Validate())
+	r.NoError((Bfd{Enabled: true, Port: uint16ptr(65535)}).Validate())
+
+	// Enabled BFD rejects intervals below the 50ms floor (anti self-DoS).
+	us := th.Duration(500 * time.Microsecond)
+	r.Error((Bfd{Enabled: true, MinTxInterval: &us}).Validate())
+	r.Error((Bfd{Enabled: true, MinRxInterval: &us}).Validate())
+	oneMs := th.Duration(time.Millisecond)
+	r.Error((Bfd{Enabled: true, MinTxInterval: &oneMs}).Validate())
+	r.Error((Bfd{Enabled: true, MinRxInterval: &oneMs}).Validate())
+	subFloor := th.Duration(49 * time.Millisecond)
+	r.Error((Bfd{Enabled: true, MinTxInterval: &subFloor}).Validate())
+	r.Error((Bfd{Enabled: true, MinRxInterval: &subFloor}).Validate())
+	floor := th.Duration(50 * time.Millisecond)
+	r.NoError((Bfd{Enabled: true, MinTxInterval: &floor}).Validate())
+	r.NoError((Bfd{Enabled: true, MinRxInterval: &floor}).Validate())
+
+	// Enabled BFD rejects intervals above the uint32-µs protocol limit (~71.6 min).
+	atMax := th.Duration(4294967295 * time.Microsecond)
+	r.NoError((Bfd{Enabled: true, MinTxInterval: &atMax}).Validate())
+	r.NoError((Bfd{Enabled: true, MinRxInterval: &atMax}).Validate())
+	tooBig := th.Duration(72 * time.Minute)
+	r.Error((Bfd{Enabled: true, MinTxInterval: &tooBig}).Validate())
+	r.Error((Bfd{Enabled: true, MinRxInterval: &tooBig}).Validate())
+
+	// Enabled BFD rejects a zero multiplier.
+	r.Error((Bfd{Enabled: true, Multiplier: uint32ptr(0)}).Validate())
+	r.NoError((Bfd{Enabled: true, Multiplier: uint32ptr(1)}).Validate())
+
+	// Enabled BFD caps the detection multiplier at 255 (RFC 5880 8-bit field;
+	// GoBGP silently truncates larger values).
+	r.NoError((Bfd{Enabled: true, Multiplier: uint32ptr(255)}).Validate())
+	r.Error((Bfd{Enabled: true, Multiplier: uint32ptr(256)}).Validate())
+
+	// Omitted pointers are valid when enabled (engine applies its default).
+	r.NoError((Bfd{Enabled: true}).Validate())
+}
+
+func uint16ptr(v uint16) *uint16 { return &v }
+
+func uint32ptr(v uint32) *uint32 { return &v }

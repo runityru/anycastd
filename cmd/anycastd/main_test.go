@@ -2,8 +2,10 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+	th "github.com/teran/go-time"
 
 	"github.com/runityru/anycastd/config"
 )
@@ -53,4 +55,47 @@ func TestDriverSpecUnsetLocalAddress(t *testing.T) {
 	// to the kernel route-lookup source (config.Announcer.LocalAddressFor).
 	require.Equal(t, "", spec.Peers[0].LocalAddress)
 	require.Equal(t, "", spec.Peers[1].LocalAddress)
+}
+
+func TestDriverSpecBfd(t *testing.T) {
+	port := uint16(4784)
+	tx := th.Duration(200 * time.Millisecond)
+	rx := th.Duration(300 * time.Millisecond)
+	mult := uint32(3)
+
+	a := config.Announcer{
+		RouterID: "192.0.2.1",
+		LocalASN: 64512,
+		Bfd: config.Bfd{
+			Enabled:       true,
+			Port:          &port,
+			MinTxInterval: &tx,
+			MinRxInterval: &rx,
+			Multiplier:    &mult,
+		},
+	}
+
+	spec := driverSpec(a)
+
+	require.True(t, spec.Bfd.Enabled)
+	require.Equal(t, &port, spec.Bfd.Port)
+	require.Equal(t, &tx, spec.Bfd.DesiredMinTxInterval)
+	require.Equal(t, &rx, spec.Bfd.RequiredMinReceive)
+	require.Equal(t, &mult, spec.Bfd.DetectionMultiplier)
+}
+
+func TestDriverSpecBfdDefaults(t *testing.T) {
+	a := config.Announcer{
+		RouterID: "192.0.2.1",
+		LocalASN: 64512,
+	}
+
+	spec := driverSpec(a)
+
+	// BFD is off by default and all fields map through as-is (nil = unset).
+	require.False(t, spec.Bfd.Enabled)
+	require.Nil(t, spec.Bfd.Port)
+	require.Nil(t, spec.Bfd.DesiredMinTxInterval)
+	require.Nil(t, spec.Bfd.RequiredMinReceive)
+	require.Nil(t, spec.Bfd.DetectionMultiplier)
 }

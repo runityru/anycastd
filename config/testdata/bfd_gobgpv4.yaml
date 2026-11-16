@@ -1,0 +1,31 @@
+announcer:
+  engine: gobgpv4
+  router_id: 10.3.3.3
+  local_address: 10.0.0.1
+  local_asn: 65999
+  routes:
+    - 10.0.0.128/32
+  bfd:
+    enabled: true
+    port: 3784
+    min_tx_interval: 300ms
+    min_rx_interval: 300ms
+    multiplier: 3
+  peers:
+    - name: some_router_1
+      remote_address: 10.0.0.252
+      remote_asn: 65000
+services:
+  - name: http
+    check_interval: 10s
+    checks:
+      - kind: http_2xx
+        spec:
+          address: 127.0.0.1:8080
+          interval: 100ms
+          path: /
+          timeout: 2s
+          tries: 3
+metrics:
+  enabled: true
+  address: 127.0.0.1:9090

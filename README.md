@@ -61,6 +61,12 @@ announcer:
   routes:
     - 10.0.0.128/32
     - 2001:db8:1::/48
+  bfd: # BFD to each peer (GoBGP v4 only). Intervals are in milliseconds (ms).
+    enabled: true
+    port: 3784 # default 3784 for all peers; set 4784 explicitly for multihop
+    min_tx_interval: 300ms # default GoBGP 1s; floor 50ms
+    min_rx_interval: 300ms # default GoBGP 1s; floor 50ms
+    multiplier: 3 # default 3; range 1..255
   peers:
     - name: some_router_1
       remote_address: 10.0.0.252
@@ -133,6 +139,54 @@ metrics:
   enabled: true
   address: 127.0.0.1:9090
 ```
+
+### BFD
+
+`announcer.bfd` enables Bidirectional Forwarding Detection (BFD) for fast
+failure detection towards each BGP peer. BFD is **GoBGP v4 only**: enabling it
+with `engine: gobgpv3` is a config error (fail-closed). A BFD session is
+established to each peer's `remote_address`; for multihop peers (derived
+automatically from `peer.enable_multihop`) BFD runs in multihop mode.
+
+| Field              | Type       | Default            | Notes                                                                                                                                    |
+| ------------------ | ---------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`          | `bool`     | `false`            | Master switch for BFD                                                                                                                    |
+| `port`             | `uint16`   | `3784`             | Destination UDP port sent to the peer; default `3784` for **all** peers; set `4784` explicitly for multihop (RFC 5883); range `1..65535` |
+| `min_tx_interval`  | `duration` | GoBGP `1s`         | Minimum transmit interval. Config is in **milliseconds** (e.g. `300ms`); floor `50ms`                                                    |
+| `min_rx_interval`  | `duration` | GoBGP `1s`         | Minimum receive interval. Config is in **milliseconds** (e.g. `300ms`); floor `50ms`                                                     |
+| `multiplier`       | `uint32`   | `3`                | Detection multiplier; range `1..255` (max `255`)                                                                                         |
+
+Multihop is **not** configured inside `bfd` — it is derived from the peer's
+`enable_multihop` automatically.
+
+**`port` semantics**: `announcer.bfd.port` is the **destination** port that
+anycastd sends BFD packets **to the peer**. The default is **`3784` for all
+peers, including multihop** — GoBGP v4 does not switch the destination port
+based on `enable_multihop`. For a multihop peer talking to an
+RFC 5883-compatible router that listens on `4784`, you must set
+`port: 4784` explicitly; do not rely on a default. The GoBGP receiving socket
+listens on **both `3784` and `4784`**, so inbound packets are accepted on
+either. The setting is **global for all peers** — a different port cannot be
+used for single-hop and multihop peers at the same time.
+
+**Peer local address**: a BFD session can only be established when the peer has
+a valid local address at `AddPeer` time. Operators enabling BFD should therefore
+set the peer's `local_address` (IPv4) / `local_address6` (IPv6) explicitly.
+
+**Units**: configuration values are durations expressed in milliseconds (e.g.
+`300ms`); on the wire and in the GoBGP API BFD uses **microseconds**
+(RFC 5880). Local detection time = `min_rx_interval × multiplier`
+(300ms × 3 ≈ 900ms failover).
+
+**Behavior on BFD-down**: GoBGP performs a hard reset of the peer whose BFD
+session went down. The prefix is simply not delivered to that peer; all other
+peers keep receiving it. anycastd does **not** withdraw the announcement.
+
+**Environment requirements**: BFD needs UDP `3784` (single-hop) / `4784`
+(multihop) in both directions plus ephemeral ports `49152–65535`. **No root is
+required** (ports are > 1024 and the container runs as `USER 65534`). BFD must
+be enabled on **both** sides to come up. Like BGP, BFD is **not
+authenticated**.
 
 ## Available checks
 
@@ -217,6 +271,7 @@ some details about peers, sessions and announces.
 | Metric name                                      | Labels          | Type  | Description                                                                                         |
 | ------------------------------------------------ | --------------- | ----- | --------------------------------------------------------------------------------------------------- |
 | anycastd_gobgp_peer_admin_state                  | router_id, peer | gauge | Peer state 0=up, 1=down, 2=pfx_ct                                                                   |
+| anycastd_gobgp_peer_bfd_state                    | router_id, peer | gauge | BFD session state of the peer 0=down, 1=up (via GoBGP ListBfdPeer)                                  |
 | anycastd_gobgp_peer_count                        | router_id       | gauge | Total amount of peers configured for the GoBGP instance                                             |
 | anycastd_gobgp_peer_flops_count                  | router_id, peer | gauge | Peer flops count                                                                                    |
 | anycastd_gobgp_peer_out_queue_count              | router_id, peer | gauge | Peer outgoing messages queue                                                                        |

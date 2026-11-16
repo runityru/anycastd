@@ -108,6 +108,12 @@ announcer:
   routes: # required, list of CIDR prefixes
     - 10.0.0.128/32
     - 2001:db8:1::/48
+  bfd: # optional, BFD to each peer (GoBGP v4 only)
+    enabled: true # default false
+    port: 3784 # default 3784 for all peers; set 4784 explicitly for multihop; range 1..65535
+    min_tx_interval: 300ms # default GoBGP 1s; floor 50ms (ms in config, µs on the wire)
+    min_rx_interval: 300ms # default GoBGP 1s; floor 50ms
+    multiplier: 3 # default 3; range 1..255
   peers: # required, at least one
     - name: some_router_1
       remote_address: 10.0.0.252
@@ -137,6 +143,7 @@ metrics:
 | `local_asn`      | `uint32`   | yes      | Local AS number                                                                             |
 | `routes`         | `[]string` | yes      | Each entry a valid CIDR; IPv4 route requires an IPv4 peer, IPv6 route requires an IPv6 peer |
 | `peers`          | `[]Peer`   | yes      | At least one peer; multihop peers need a local address                                      |
+| `bfd`            | `BFD`      | no       | Optional BFD block; **GoBGP v4 only** (see §3.4.1)                                          |
 
 > **Breaking schema change (deliberate).** The `engine` field is **required** and
 > has **no default** — omitting it, or setting any value other than `gobgpv3` or
@@ -169,6 +176,43 @@ to use the kernel route-lookup source address for the session.
 An IPv6 peer (`remote_address` parses as IPv6) selects the IPv6 local address.
 When `enable_multihop` is set and no local address is available, an IPv6 peer
 requires `local_address6`; an IPv4 peer requires `local_address`.
+
+### 3.4.1 `bfd`
+
+`announcer.bfd` enables Bidirectional Forwarding Detection (BFD) for fast
+failure detection towards **each** configured BGP peer. A BFD session is
+established to each peer's `remote_address`; for multihop peers (derived
+automatically from `peer.enable_multihop`) BFD runs in multihop mode.
+
+> **GoBGP v4 only (fail-closed).** BFD is supported exclusively by the GoBGP v4
+> backend. Setting `enabled: true` with `engine: gobgpv3` is a **config error**;
+> there is no implicit fallback.
+
+| Field              | Type            | Required | Default            | Validation                                                                                                                               |
+| ------------------ | --------------- | -------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`          | `bool`          | no       | `false`            | Master switch for BFD                                                                                                                    |
+| `port`             | `uint16`        | no       | `3784`             | Destination UDP port sent to the peer; default `3784` for **all** peers; set `4784` explicitly for multihop (RFC 5883); range `1..65535` |
+| `min_tx_interval`  | `time.Duration` | no       | GoBGP `1s`         | Minimum transmit interval; floor `50ms`                                                                                                  |
+| `min_rx_interval`  | `time.Duration` | no       | GoBGP `1s`         | Minimum receive interval; floor `50ms`                                                                                                   |
+| `multiplier`       | `uint32`        | no       | `3`                | Detection multiplier; range `1..255` (max `255`)                                                                                         |
+
+**Multihop is not set inside `bfd`** — it is derived automatically from the
+peer's `enable_multihop`.
+
+**`port` semantics.** `announcer.bfd.port` is the **destination** port that
+anycastd sends BFD packets **to the peer**. The default is **`3784` for all
+peers, including multihop** — GoBGP v4 does not switch the destination port
+based on `enable_multihop`. For a multihop peer talking to an
+RFC 5883-compatible router that listens on `4784`, set `port: 4784` explicitly;
+do not rely on a default. The GoBGP receiving socket listens on **both `3784`
+and `4784`**, so inbound packets are accepted on either. The setting is
+**global for all peers** — a different port cannot be used for single-hop and
+multihop peers at the same time.
+
+**Units.** In configuration, `min_tx_interval` / `min_rx_interval` are Go
+durations expressed in **milliseconds** (e.g. `300ms`). On the wire and in the
+GoBGP API, BFD uses **microseconds** per RFC 5880. Local detection time is
+`min_rx_interval × multiplier` (e.g. 300ms × 3 ≈ 900ms failover).
 
 ### 3.5 `service`
 
@@ -334,6 +378,26 @@ Both engines implement the identical engine-agnostic `announcer.Driver`
 and are selected by the config `engine` field; v3 and v4 link into the same
 binary (see the coexist test).
 
+#### BFD (GoBGP v4 only)
+
+When `announcer.bfd.enabled` is `true`, the GoBGP v4 driver configures a BFD
+session to **each** peer's `remote_address` (`ListBfdPeer` is used to observe
+session state). Multihop mode is derived automatically from
+`peer.enable_multihop`. **BFD is v4-only**: with `engine: gobgpv3` and
+`bfd.enabled: true` config validation fails (fail-closed).
+
+* **Behavior on BFD-down**: GoBGP performs a hard reset of the peer whose BFD
+  session went down. The prefix is simply not delivered to that peer; all other
+  peers keep receiving it. anycastd does **not** withdraw the announcement.
+* **Peer local address**: a BFD session can only be established when the peer
+  has a valid local address at `AddPeer` time, so operators enabling BFD should
+  set the peer's `local_address` (IPv4) / `local_address6` (IPv6) explicitly.
+* **Units**: config uses milliseconds (`300ms`); GoBGP/the wire use microseconds
+  per RFC 5880. Local detection time = `min_rx_interval × multiplier`.
+* **Root is not required**: BFD uses UDP ports `3784` (single-hop) / `4784`
+  (multihop), both `> 1024`, and the container runs as non-root `USER 65534`.
+  BFD must be enabled on **both** sides to come up.
+
 ## 6. Checkers
 
 Checkers implement the `Checker` interface:
@@ -409,6 +473,7 @@ are polled every **1 second** by `announcer.NewMetricsRepository(...).Run`.
 | -------------------------------------------------- | ----------------- |
 | `anycastd_gobgp_peer_count`                        | `router_id`       |
 | `anycastd_gobgp_peer_admin_state`                  | `router_id, peer` |
+| `anycastd_gobgp_peer_bfd_state`                    | `router_id, peer` |
 | `anycastd_gobgp_peer_session_state`                | `router_id, peer` |
 | `anycastd_gobgp_peer_out_queue_count`              | `router_id, peer` |
 | `anycastd_gobgp_peer_flops_count`                  | `router_id, peer` |
@@ -436,6 +501,10 @@ are polled every **1 second** by `announcer.NewMetricsRepository(...).Run`.
 `peer_password_set_flag` is set from `PeerState.PasswordSet` (mapped from the
 GoBGP peer's `AuthPassword`); because anycastd does not configure peer
 authentication (see §8), it is normally `0`.
+
+`anycastd_gobgp_peer_bfd_state` reports the BFD session state of a peer
+(`1` = up, `0` = down) as read via GoBGP `ListBfdPeer`; it is present only
+when BFD is enabled (GoBGP v4).
 
 ### 7.3 Checker metrics
 
@@ -477,6 +546,11 @@ The security posture is **honest and limited by design**:
   `anycastd_gobgp_peer_password_set_flag` metric merely _reads_ the flag from
   GoBGP and does not enable anything. BGP sessions are unauthenticated; secure
   the control plane at the network layer (e.g. ACLs / isolated network).
+* **BFD is not authenticated either.** Like BGP, BFD sessions carry no
+  authentication. BFD uses UDP `3784` (single-hop) / `4784` (multihop) in both
+  directions plus ephemeral ports `49152–65535`. No root is required (ports
+  are `> 1024`, container runs as non-root); BFD must be enabled on both sides
+  to come up.
 * **TLS exists only as a health check** (`tls_certificate`), not as transport
   security for the daemon's own endpoints. Note that `tls_certificate` accepts
   `remote.insecure: true`, which **disables server-certificate verification**

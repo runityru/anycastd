@@ -14,6 +14,7 @@ import (
 )
 
 var _ announcer.Driver = (*driver)(nil)
+var _ announcer.CapabilityProvider = (*driver)(nil)
 
 // driver is the GoBGP v4 implementation of the engine-agnostic
 // announcer.Driver. It embeds the path adapter and the peer-state source
@@ -22,6 +23,7 @@ var _ announcer.Driver = (*driver)(nil)
 type driver struct {
 	srv    *server.BgpServer
 	logger *slog.Logger
+	bfd    announcer.BfdSpec
 	adapter
 	peerStateSource
 }
@@ -40,6 +42,7 @@ func NewDriver(spec announcer.DriverSpec, logger *log.Logger) (announcer.Driver,
 	return &driver{
 		srv:             srv,
 		logger:          slogger,
+		bfd:             spec.Bfd,
 		adapter:         adapter{srv: srv},
 		peerStateSource: peerStateSource{srv: srv, logger: logger},
 	}, nil
@@ -49,6 +52,11 @@ func NewDriver(spec announcer.DriverSpec, logger *log.Logger) (announcer.Driver,
 func (d *driver) Serve() error {
 	d.srv.Serve()
 	return nil
+}
+
+// Capabilities reports the feature set of the GoBGP v4 engine.
+func (d *driver) Capabilities() announcer.Capabilities {
+	return announcer.Capabilities{SupportsBFD: true}
 }
 
 // Start brings the BGP engine up: it starts the global instance, registers
@@ -76,7 +84,7 @@ func (d *driver) Start(ctx context.Context, spec announcer.DriverSpec) error {
 
 	for _, peer := range spec.Peers {
 		if err := d.srv.AddPeer(ctx, &api.AddPeerRequest{
-			Peer: newPeer(peer),
+			Peer: newPeer(peer, d.bfd),
 		}); err != nil {
 			return err
 		}
@@ -93,7 +101,7 @@ func (d *driver) Stop(ctx context.Context) error {
 // AddPeer adds a single peer to the running server.
 func (d *driver) AddPeer(ctx context.Context, peer announcer.PeerSpec) error {
 	return d.srv.AddPeer(ctx, &api.AddPeerRequest{
-		Peer: newPeer(peer),
+		Peer: newPeer(peer, d.bfd),
 	})
 }
 
@@ -101,8 +109,14 @@ func (d *driver) AddPeer(ctx context.Context, peer announcer.PeerSpec) error {
 // local address (already family-appropriate in PeerSpec.LocalAddress), or from
 // the kernel route-lookup source when that is unset. AfiSafis stays empty, so
 // GoBGP enables only the family of the peer's address.
-func newPeer(peer announcer.PeerSpec) *api.Peer {
-	return &api.Peer{
+//
+// When BFD is enabled the peer carries a *api.BfdPeerConfig. Note that a BFD
+// session can only be established when the peer has a valid local address at
+// AddPeer time, so callers enabling BFD should set PeerSpec.LocalAddress.
+// Unset (nil) BfdSpec fields are left as 0, letting GoBGP apply its defaults
+// (tx=rx=1s, multiplier 3, port 3784/4784).
+func newPeer(peer announcer.PeerSpec, bfd announcer.BfdSpec) *api.Peer {
+	p := &api.Peer{
 		Conf: &api.PeerConf{
 			NeighborAddress: peer.RemoteAddress,
 			PeerAsn:         peer.RemoteASN,
@@ -118,4 +132,36 @@ func newPeer(peer announcer.PeerSpec) *api.Peer {
 		// GoBGP's default retry is 120 s.
 		Timers: &api.Timers{Config: &api.TimersConfig{ConnectRetry: 5}},
 	}
+
+	// A non-zero RemotePort overrides the BGP default of 179 (used for tests
+	// against a peer on an ephemeral port, and for non-standard session ports).
+	// GoBGP's API uses uint32; widening the 16-bit PeerSpec port is safe.
+	if peer.RemotePort != 0 {
+		p.Transport.RemotePort = uint32(peer.RemotePort)
+	}
+
+	if !bfd.Enabled {
+		return p
+	}
+
+	p.Bfd = &api.BfdPeerConfig{
+		Enabled:  true,
+		Multihop: peer.EnableMultihop,
+	}
+	if bfd.Port != nil {
+		p.Bfd.Port = uint32(*bfd.Port)
+	}
+	if bfd.DesiredMinTxInterval != nil {
+		// #nosec G115 -- value is capped by config.Bfd maxBfdInterval (uint32 µs limit).
+		p.Bfd.DesiredMinimumTxInterval = uint32(bfd.DesiredMinTxInterval.TimeDuration().Microseconds())
+	}
+	if bfd.RequiredMinReceive != nil {
+		// #nosec G115 -- value is capped by config.Bfd maxBfdInterval (uint32 µs limit).
+		p.Bfd.RequiredMinimumReceive = uint32(bfd.RequiredMinReceive.TimeDuration().Microseconds())
+	}
+	if bfd.DetectionMultiplier != nil {
+		p.Bfd.DetectionMultiplier = *bfd.DetectionMultiplier
+	}
+
+	return p
 }

@@ -110,7 +110,7 @@ announcer:
     - 2001:db8:1::/48
   bfd: # optional, BFD to each peer (GoBGP v4 only)
     enabled: true # default false
-    port: 3784 # default 3784 single-hop / 4784 multihop; range 1..65535
+    port: 3784 # default 3784 for all peers; set 4784 explicitly for multihop; range 1..65535
     min_tx_interval: 300ms # default GoBGP 1s; floor 50ms (ms in config, µs on the wire)
     min_rx_interval: 300ms # default GoBGP 1s; floor 50ms
     multiplier: 3 # default 3; range 1..255
@@ -191,7 +191,7 @@ automatically from `peer.enable_multihop`) BFD runs in multihop mode.
 | Field              | Type            | Required | Default            | Validation                                                                 |
 | ------------------ | --------------- | -------- | ------------------ | -------------------------------------------------------------------------- |
 | `enabled`          | `bool`          | no       | `false`            | Master switch for BFD                                                      |
-| `port`             | `uint16`        | no       | `3784`/`4784`      | Destination UDP port sent to the peer; default `3784` single-hop, `4784` multihop; range `1..65535` |
+| `port`             | `uint16`        | no       | `3784`            | Destination UDP port sent to the peer; default `3784` for **all** peers; set `4784` explicitly for multihop (RFC 5883); range `1..65535` |
 | `min_tx_interval`  | `time.Duration` | no       | GoBGP `1s`         | Minimum transmit interval; floor `50ms`                                     |
 | `min_rx_interval`  | `time.Duration` | no       | GoBGP `1s`         | Minimum receive interval; floor `50ms`                                      |
 | `multiplier`       | `uint32`        | no       | `3`                | Detection multiplier; range `1..255` (max `255`)                            |
@@ -200,10 +200,14 @@ automatically from `peer.enable_multihop`) BFD runs in multihop mode.
 peer's `enable_multihop`.
 
 **`port` semantics.** `announcer.bfd.port` is the **destination** port that
-anycastd sends BFD packets **to the peer**; the receiving socket on the GoBGP
-side is always fixed at `3784` (single-hop) / `4784` (multihop). The setting is
+anycastd sends BFD packets **to the peer**. The default is **`3784` for all
+peers, including multihop** — GoBGP v4 does not switch the destination port
+based on `enable_multihop`. For a multihop peer talking to an
+RFC 5883-compatible router that listens on `4784`, set `port: 4784` explicitly;
+do not rely on a default. The GoBGP receiving socket listens on **both `3784`
+and `4784`**, so inbound packets are accepted on either. The setting is
 **global for all peers** — a different port cannot be used for single-hop and
-multihop peers at the same time; in practice rely on the default.
+multihop peers at the same time.
 
 **Units.** In configuration, `min_tx_interval` / `min_rx_interval` are Go
 durations expressed in **milliseconds** (e.g. `300ms`). On the wire and in the

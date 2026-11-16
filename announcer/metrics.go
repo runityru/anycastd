@@ -17,6 +17,7 @@ type metrics struct {
 	peerCount        *prometheus.GaugeVec
 	peerAdminState   *prometheus.GaugeVec
 	peerSessionState *prometheus.GaugeVec
+	peerBfdState     *prometheus.GaugeVec
 
 	receivedMessagesTotal          *prometheus.GaugeVec
 	receivedMessagesNotification   *prometheus.GaugeVec
@@ -75,6 +76,15 @@ func NewMetricsRepository(src PeerStateSource, routerID string, reg prometheus.R
 				Subsystem: "gobgp",
 				Name:      "peer_session_state",
 				Help:      "Peer session state 0=unknown, 1=idle, 2=connect, 3=active, 4=opensent, 5=openconfirm, 6=established",
+			},
+			[]string{"router_id", "peer"},
+		),
+		peerBfdState: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: "anycastd",
+				Subsystem: "gobgp",
+				Name:      "peer_bfd_state",
+				Help:      "BFD session state of the peer 0=down, 1=up (present only when BFD is enabled, GoBGP v4)",
 			},
 			[]string{"router_id", "peer"},
 		),
@@ -313,6 +323,16 @@ func (m *metrics) collect(ctx context.Context) {
 			peerRouterID,
 		).Set(float64(peer.SessionState))
 
+		// The BFD state series is emitted only for peers that have BFD enabled
+		// (GoBGP v4). Peers without BFD never get a series, matching the
+		// documented semantics "present only when BFD is enabled".
+		if peer.BfdEnabled {
+			m.peerBfdState.WithLabelValues(
+				m.routerID,
+				peerRouterID,
+			).Set(float64(peer.BfdState))
+		}
+
 		m.bgpPeerOutQueueCount.WithLabelValues(
 			m.routerID,
 			peerRouterID,
@@ -456,6 +476,7 @@ func (m *metrics) Register() error {
 		m.peerCount,
 		m.peerAdminState,
 		m.peerSessionState,
+		m.peerBfdState,
 
 		m.bgpPeerOutQueueCount,
 		m.bgpPeerFlopsCount,

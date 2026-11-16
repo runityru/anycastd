@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	validation "github.com/go-ozzo/ozzo-validation/v4"
 	"github.com/go-ozzo/ozzo-validation/v4/is"
@@ -48,6 +49,7 @@ var notUnspecified = validation.By(func(v any) error {
 var (
 	_ validation.Validatable = (*Config)(nil)
 	_ validation.Validatable = (*Announcer)(nil)
+	_ validation.Validatable = (*Bfd)(nil)
 	_ validation.Validatable = (*Service)(nil)
 	_ validation.Validatable = (*Metrics)(nil)
 	_ validation.Validatable = (*Check)(nil)
@@ -62,6 +64,42 @@ type Announcer struct {
 	LocalASN      uint32   `json:"local_asn"`
 	Routes        []string `json:"routes"`
 	Peers         []Peer   `json:"peers"`
+	Bfd           Bfd      `json:"bfd"`
+}
+
+// Bfd configures Bidirectional Forwarding Detection (BFD) towards every BGP
+// peer. Enabled is the on/off switch; a nil field means "unset" so the engine
+// applies its default. BFD is GoBGP v4 only.
+type Bfd struct {
+	Enabled       bool         `json:"enabled"`
+	Port          *uint16      `json:"port"`
+	MinTxInterval *th.Duration `json:"min_tx_interval"`
+	MinRxInterval *th.Duration `json:"min_rx_interval"`
+	Multiplier    *uint32      `json:"multiplier"`
+}
+
+// maxBfdInterval is the largest interval the BFD protocol can express: the
+// on-the-wire intervals are uint32 microseconds, so anything larger than
+// 4294967295 µs (~71.6 min) would overflow when the GoBGP v4 driver narrows
+// the int64 duration to uint32. Capping it here makes that conversion in
+// announcer/gobgpv4 provably safe.
+const maxBfdInterval = th.Duration(4294967295 * time.Microsecond)
+
+func (b Bfd) Validate() error {
+	return validation.ValidateStruct(&b,
+		validation.Field(&b.Port,
+			validation.When(b.Enabled, validation.Min(uint16(1)).ValidateEmpty(), validation.Max(uint16(65535)).ValidateEmpty())),
+		validation.Field(&b.MinTxInterval,
+			validation.When(b.Enabled,
+				validation.Min(th.Millisecond).ValidateEmpty(),
+				validation.Max(maxBfdInterval).ValidateEmpty())),
+		validation.Field(&b.MinRxInterval,
+			validation.When(b.Enabled,
+				validation.Min(th.Millisecond).ValidateEmpty(),
+				validation.Max(maxBfdInterval).ValidateEmpty())),
+		validation.Field(&b.Multiplier,
+			validation.When(b.Enabled, validation.Min(uint32(1)).ValidateEmpty())),
+	)
 }
 
 func (a Announcer) Validate() error {
@@ -94,6 +132,16 @@ func (a Announcer) Validate() error {
 		return errors.New("enable_multihop requires local_address")
 	})
 
+	// BFD is only implemented by the GoBGP v4 engine; enabling it with v3 is a
+	// config error (fail-closed).
+	bfdEngineSupported := validation.By(func(v any) error {
+		b := v.(Bfd)
+		if b.Enabled && a.Engine == "gobgpv3" {
+			return errors.New("requires engine gobgpv4")
+		}
+		return nil
+	})
+
 	return validation.ValidateStruct(&a,
 		validation.Field(&a.Engine, validation.Required, validation.In("gobgpv3", "gobgpv4")),
 		validation.Field(&a.RouterID, validation.Required, is.IPv4),
@@ -102,6 +150,7 @@ func (a Announcer) Validate() error {
 		validation.Field(&a.LocalASN, validation.Required),
 		validation.Field(&a.Routes, validation.Required, validation.Each(routeHasPeer)),
 		validation.Field(&a.Peers, validation.Required, validation.Each(multihopHasLocalAddress)),
+		validation.Field(&a.Bfd, bfdEngineSupported),
 	)
 }
 

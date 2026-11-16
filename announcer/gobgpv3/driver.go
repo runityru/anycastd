@@ -2,6 +2,7 @@ package gobgpv3
 
 import (
 	"context"
+	"errors"
 
 	apipb "github.com/osrg/gobgp/v3/api"
 	"github.com/osrg/gobgp/v3/pkg/server"
@@ -11,6 +12,7 @@ import (
 )
 
 var _ announcer.Driver = (*driver)(nil)
+var _ announcer.CapabilityProvider = (*driver)(nil)
 
 // driver is the GoBGP v3 implementation of the engine-agnostic
 // announcer.Driver. It embeds the path adapter and the peer-state source
@@ -30,6 +32,12 @@ type driver struct {
 // (in a goroutine) before Start, since GoBGP's StartBgp/WatchEvent block until
 // Serve runs.
 func NewDriver(spec announcer.DriverSpec, logger *log.Logger) (announcer.Driver, error) {
+	// The GoBGP v3 engine does not support BFD. Fail closed rather than
+	// silently ignoring the request.
+	if spec.Bfd.Enabled {
+		return nil, errors.New("engine gobgpv3 does not support BFD")
+	}
+
 	srv := server.NewBgpServer(server.LoggerOption(&Logger{Logger: logger}))
 	return &driver{
 		srv:             srv,
@@ -43,6 +51,11 @@ func NewDriver(spec announcer.DriverSpec, logger *log.Logger) (announcer.Driver,
 func (d *driver) Serve() error {
 	d.srv.Serve()
 	return nil
+}
+
+// Capabilities reports the feature set of the GoBGP v3 engine.
+func (d *driver) Capabilities() announcer.Capabilities {
+	return announcer.Capabilities{SupportsBFD: false}
 }
 
 // Start brings the BGP engine up: it starts the global instance, registers

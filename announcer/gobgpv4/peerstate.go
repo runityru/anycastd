@@ -26,10 +26,26 @@ func NewPeerStateSource(srv *server.BgpServer, logger *log.Logger) announcer.Pee
 
 func (s *peerStateSource) ListPeers(ctx context.Context) ([]announcer.PeerState, error) {
 	out := []announcer.PeerState{}
+
+	// Gather the BFD session state of every peer that has a BFD session
+	// configured (GoBGP v4 only). ListBfdPeer only reports peers with an
+	// active BFD config, so a peer's presence here is the "BFD enabled" signal.
+	bfdStates := map[string]api.BfdSessionState{}
+	s.srv.ListBfdPeer(ctx, func(peerAddress string, state *api.BfdPeerState) {
+		if state == nil {
+			return
+		}
+		bfdStates[peerAddress] = state.GetSessionState()
+	})
+
 	if err := s.srv.ListPeer(ctx, &api.ListPeerRequest{}, func(p *api.Peer) {
 		ps, ok := s.mapPeer(p)
 		if !ok {
 			return
+		}
+		if bfdState, present := bfdStates[ps.NeighborAddress]; present {
+			ps.BfdEnabled = true
+			ps.BfdState = normalizeBfdState(bfdState)
 		}
 		out = append(out, ps)
 	}); err != nil {
@@ -121,6 +137,16 @@ func enumToUint32(name string, v int32) (uint32, error) {
 		return 0, errors.Errorf("%s has unexpected negative value: %d", name, v)
 	}
 	return uint32(v), nil
+}
+
+// normalizeBfdState maps a GoBGP v4 api.BfdSessionState onto the engine-agnostic
+// 0=down, 1=up encoding used by the peer_bfd_state metric. Only the UP state
+// maps to up; every other state (down, admin-down, init, unspecified) is down.
+func normalizeBfdState(v api.BfdSessionState) uint32 {
+	if v == api.BfdSessionState_BFD_SESSION_STATE_UP {
+		return 1
+	}
+	return 0
 }
 
 // messageCounterFromV4 maps a GoBGP v4 *api.Message onto

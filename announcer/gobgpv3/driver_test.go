@@ -1,8 +1,10 @@
 package gobgpv3
 
 import (
+	"io"
 	"testing"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
 	"github.com/runityru/anycastd/announcer"
@@ -54,4 +56,36 @@ func TestNewPeer(t *testing.T) {
 			r.Equal(uint64(5), p.Timers.Config.ConnectRetry)
 		})
 	}
+}
+
+func TestNewDriverBFDFailClosed(t *testing.T) {
+	r := require.New(t)
+
+	logger := log.New()
+	logger.SetOutput(io.Discard)
+
+	// BFD enabled on the gobgpv3 engine must fail closed.
+	_, err := NewDriver(announcer.DriverSpec{
+		Bfd: announcer.BfdSpec{Enabled: true},
+	}, logger)
+	r.Error(err)
+	r.Contains(err.Error(), "does not support BFD")
+
+	// BFD disabled must succeed.
+	d, err := NewDriver(announcer.DriverSpec{}, logger)
+	r.NoError(err)
+	r.NotNil(d)
+}
+
+func TestCapabilities(t *testing.T) {
+	r := require.New(t)
+
+	logger := log.New()
+	logger.SetOutput(io.Discard)
+	d, err := NewDriver(announcer.DriverSpec{}, logger)
+	r.NoError(err)
+
+	cp, ok := d.(announcer.CapabilityProvider)
+	r.True(ok)
+	r.False(cp.Capabilities().SupportsBFD)
 }

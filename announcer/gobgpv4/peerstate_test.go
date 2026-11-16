@@ -124,6 +124,28 @@ func TestNormalizePeerType(t *testing.T) {
 	}
 }
 
+func TestNormalizeBfdState(t *testing.T) {
+	tcs := []struct {
+		name string
+		in   api.BfdSessionState
+		exp  uint32
+	}{
+		{name: "up maps to up", in: api.BfdSessionState_BFD_SESSION_STATE_UP, exp: 1},
+		{name: "down maps to down", in: api.BfdSessionState_BFD_SESSION_STATE_DOWN, exp: 0},
+		{name: "admin down maps to down", in: api.BfdSessionState_BFD_SESSION_STATE_ADMIN_DOWN, exp: 0},
+		{name: "init maps to down", in: api.BfdSessionState_BFD_SESSION_STATE_INIT, exp: 0},
+		{name: "unspecified maps to down", in: api.BfdSessionState_BFD_SESSION_STATE_UNSPECIFIED, exp: 0},
+		{name: "unknown maps to down", in: api.BfdSessionState(99), exp: 0},
+	}
+
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			r := require.New(t)
+			r.Equal(tc.exp, normalizeBfdState(tc.in))
+		})
+	}
+}
+
 // TestListPeersSkipsBadPeer verifies the per-peer mapping used by ListPeers:
 // a single peer that fails to map is skipped (logged, not errored) without
 // discarding the remaining healthy peers.

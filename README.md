@@ -148,13 +148,13 @@ with `engine: gobgpv3` is a config error (fail-closed). A BFD session is
 established to each peer's `remote_address`; for multihop peers (derived
 automatically from `peer.enable_multihop`) BFD runs in multihop mode.
 
-| Field              | Type       | Default            | Notes                                                                       |
-| ------------------ | ---------- | ------------------ | --------------------------------------------------------------------------- |
-| `enabled`          | `bool`     | `false`            | Master switch for BFD                                                       |
-| `port`             | `uint16`   | `3784`            | Destination UDP port sent to the peer; default `3784` for **all** peers; set `4784` explicitly for multihop (RFC 5883); range `1..65535` |
-| `min_tx_interval`  | `duration` | GoBGP `1s`         | Minimum transmit interval. Config is in **milliseconds** (e.g. `300ms`); floor `50ms` |
-| `min_rx_interval`  | `duration` | GoBGP `1s`         | Minimum receive interval. Config is in **milliseconds** (e.g. `300ms`); floor `50ms` |
-| `multiplier`       | `uint32`   | `3`                | Detection multiplier; range `1..255` (max `255`)                            |
+| Field              | Type       | Default            | Notes                                                                                                                                    |
+| ------------------ | ---------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`          | `bool`     | `false`            | Master switch for BFD                                                                                                                    |
+| `port`             | `uint16`   | `3784`             | Destination UDP port sent to the peer; default `3784` for **all** peers; set `4784` explicitly for multihop (RFC 5883); range `1..65535` |
+| `min_tx_interval`  | `duration` | GoBGP `1s`         | Minimum transmit interval. Config is in **milliseconds** (e.g. `300ms`); floor `50ms`                                                    |
+| `min_rx_interval`  | `duration` | GoBGP `1s`         | Minimum receive interval. Config is in **milliseconds** (e.g. `300ms`); floor `50ms`                                                     |
+| `multiplier`       | `uint32`   | `3`                | Detection multiplier; range `1..255` (max `255`)                                                                                         |
 
 Multihop is **not** configured inside `bfd` — it is derived from the peer's
 `enable_multihop` automatically.
@@ -187,7 +187,6 @@ peers keep receiving it. anycastd does **not** withdraw the announcement.
 required** (ports are > 1024 and the container runs as `USER 65534`). BFD must
 be enabled on **both** sides to come up. Like BGP, BFD is **not
 authenticated**.
-
 
 ## Available checks
 

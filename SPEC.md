@@ -188,13 +188,13 @@ automatically from `peer.enable_multihop`) BFD runs in multihop mode.
 > backend. Setting `enabled: true` with `engine: gobgpv3` is a **config error**;
 > there is no implicit fallback.
 
-| Field              | Type            | Required | Default            | Validation                                                                 |
-| ------------------ | --------------- | -------- | ------------------ | -------------------------------------------------------------------------- |
-| `enabled`          | `bool`          | no       | `false`            | Master switch for BFD                                                      |
-| `port`             | `uint16`        | no       | `3784`            | Destination UDP port sent to the peer; default `3784` for **all** peers; set `4784` explicitly for multihop (RFC 5883); range `1..65535` |
-| `min_tx_interval`  | `time.Duration` | no       | GoBGP `1s`         | Minimum transmit interval; floor `50ms`                                     |
-| `min_rx_interval`  | `time.Duration` | no       | GoBGP `1s`         | Minimum receive interval; floor `50ms`                                      |
-| `multiplier`       | `uint32`        | no       | `3`                | Detection multiplier; range `1..255` (max `255`)                            |
+| Field              | Type            | Required | Default            | Validation                                                                                                                               |
+| ------------------ | --------------- | -------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled`          | `bool`          | no       | `false`            | Master switch for BFD                                                                                                                    |
+| `port`             | `uint16`        | no       | `3784`             | Destination UDP port sent to the peer; default `3784` for **all** peers; set `4784` explicitly for multihop (RFC 5883); range `1..65535` |
+| `min_tx_interval`  | `time.Duration` | no       | GoBGP `1s`         | Minimum transmit interval; floor `50ms`                                                                                                  |
+| `min_rx_interval`  | `time.Duration` | no       | GoBGP `1s`         | Minimum receive interval; floor `50ms`                                                                                                   |
+| `multiplier`       | `uint32`        | no       | `3`                | Detection multiplier; range `1..255` (max `255`)                                                                                         |
 
 **Multihop is not set inside `bfd`** — it is derived automatically from the
 peer's `enable_multihop`.

@@ -64,9 +64,9 @@ announcer:
   bfd: # BFD to each peer (GoBGP v4 only). Intervals are in milliseconds (ms).
     enabled: true
     port: 3784 # default 3784 single-hop / 4784 multihop (derived from peer.enable_multihop)
-    min_tx_interval: 300ms # default GoBGP 1s; floor 1ms
-    min_rx_interval: 300ms # default GoBGP 1s; floor 1ms
-    multiplier: 3 # default 3; floor >= 1
+    min_tx_interval: 300ms # default GoBGP 1s; floor 50ms
+    min_rx_interval: 300ms # default GoBGP 1s; floor 50ms
+    multiplier: 3 # default 3; range 1..255
   peers:
     - name: some_router_1
       remote_address: 10.0.0.252
@@ -152,9 +152,9 @@ automatically from `peer.enable_multihop`) BFD runs in multihop mode.
 | ------------------ | ---------- | ------------------ | --------------------------------------------------------------------------- |
 | `enabled`          | `bool`     | `false`            | Master switch for BFD                                                       |
 | `port`             | `uint16`   | `3784` / `4784`    | Destination UDP port sent to the peer; default `3784` single-hop, `4784` multihop; range `1..65535` |
-| `min_tx_interval`  | `duration` | GoBGP `1s`         | Minimum transmit interval. Config is in **milliseconds** (e.g. `300ms`); floor `1ms` |
-| `min_rx_interval`  | `duration` | GoBGP `1s`         | Minimum receive interval. Config is in **milliseconds** (e.g. `300ms`); floor `1ms` |
-| `multiplier`       | `uint32`   | `3`                | Detection multiplier; floor `>= 1`                                          |
+| `min_tx_interval`  | `duration` | GoBGP `1s`         | Minimum transmit interval. Config is in **milliseconds** (e.g. `300ms`); floor `50ms` |
+| `min_rx_interval`  | `duration` | GoBGP `1s`         | Minimum receive interval. Config is in **milliseconds** (e.g. `300ms`); floor `50ms` |
+| `multiplier`       | `uint32`   | `3`                | Detection multiplier; range `1..255` (max `255`)                            |
 
 Multihop is **not** configured inside `bfd` — it is derived from the peer's
 `enable_multihop` automatically.

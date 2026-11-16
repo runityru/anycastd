@@ -111,9 +111,9 @@ announcer:
   bfd: # optional, BFD to each peer (GoBGP v4 only)
     enabled: true # default false
     port: 3784 # default 3784 single-hop / 4784 multihop; range 1..65535
-    min_tx_interval: 300ms # default GoBGP 1s; floor 1ms (ms in config, µs on the wire)
-    min_rx_interval: 300ms # default GoBGP 1s; floor 1ms
-    multiplier: 3 # default 3; floor >= 1
+    min_tx_interval: 300ms # default GoBGP 1s; floor 50ms (ms in config, µs on the wire)
+    min_rx_interval: 300ms # default GoBGP 1s; floor 50ms
+    multiplier: 3 # default 3; range 1..255
   peers: # required, at least one
     - name: some_router_1
       remote_address: 10.0.0.252
@@ -192,9 +192,9 @@ automatically from `peer.enable_multihop`) BFD runs in multihop mode.
 | ------------------ | --------------- | -------- | ------------------ | -------------------------------------------------------------------------- |
 | `enabled`          | `bool`          | no       | `false`            | Master switch for BFD                                                      |
 | `port`             | `uint16`        | no       | `3784`/`4784`      | Destination UDP port sent to the peer; default `3784` single-hop, `4784` multihop; range `1..65535` |
-| `min_tx_interval`  | `time.Duration` | no       | GoBGP `1s`         | Minimum transmit interval; floor `1ms`                                     |
-| `min_rx_interval`  | `time.Duration` | no       | GoBGP `1s`         | Minimum receive interval; floor `1ms`                                      |
-| `multiplier`       | `uint32`        | no       | `3`                | Detection multiplier; floor `>= 1`                                         |
+| `min_tx_interval`  | `time.Duration` | no       | GoBGP `1s`         | Minimum transmit interval; floor `50ms`                                     |
+| `min_rx_interval`  | `time.Duration` | no       | GoBGP `1s`         | Minimum receive interval; floor `50ms`                                      |
+| `multiplier`       | `uint32`        | no       | `3`                | Detection multiplier; range `1..255` (max `255`)                            |
 
 **Multihop is not set inside `bfd`** — it is derived automatically from the
 peer's `enable_multihop`.

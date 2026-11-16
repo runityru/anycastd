@@ -172,3 +172,91 @@ func TestListPeersSkipsBadPeer(t *testing.T) {
 	r.True(ok, "a healthy peer should be mapped")
 	r.Equal("10.0.0.2", ps.NeighborAddress)
 }
+
+// awaitPeerState polls ListPeers until a peer with the given neighbor address
+// appears, returning its state. The BGP session itself may never establish (the
+// BFD test peers do not speak BGP), so we poll for the peer to be listed.
+func awaitPeerState(t *testing.T, src announcer.PeerStateSource, addr string) announcer.PeerState {
+	t.Helper()
+	var ps announcer.PeerState
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		states, err := src.ListPeers(t.Context())
+		assert.NoError(c, err)
+		for i := range states {
+			if states[i].NeighborAddress == addr {
+				ps = states[i]
+				return
+			}
+		}
+	}, 10*time.Second, 100*time.Millisecond, "peer %q never listed", addr)
+	return ps
+}
+
+// TestPeerStateSourceBFD exercises the ListBfdPeer -> PeerState.BfdEnabled /
+// BfdState bridge in peerStateSource.ListPeers against a real in-memory GoBGP
+// v4 server with a live BFD session (reusing the bfd_integration_test
+// topology), so the metric's source of truth (peer_bfd_state) is verified
+// end to end.
+func TestPeerStateSourceBFD(t *testing.T) {
+	logger := log.New()
+	logger.SetOutput(io.Discard)
+
+	t.Run("BFD session up maps to BfdEnabled=true BfdState=1", func(t *testing.T) {
+		peer := newBfdTestPeer(t, "udp4", server.BfdServerPort)
+		defer peer.close()
+		bfdPort := uint16(peer.Port())
+
+		srv := startBFDDriver(t,
+			announcer.PeerSpec{Name: "bfd-peer", RemoteAddress: "127.0.0.1", RemoteASN: 65000, LocalAddress: "127.0.0.1"},
+			announcer.BfdSpec{Enabled: true, Port: &bfdPort},
+		)
+		waitBFDSessionUp(t, srv)
+
+		ps := awaitPeerState(t, NewPeerStateSource(srv, logger), "127.0.0.1")
+		r := require.New(t)
+		r.True(ps.BfdEnabled)
+		r.Equal(uint32(1), ps.BfdState)
+	})
+
+	t.Run("BFD session down maps to BfdEnabled=true BfdState=0", func(t *testing.T) {
+		// BFD enabled towards a port nothing listens on: the session exists but
+		// stays DOWN, and is still reported by ListBfdPeer.
+		bfdPort := uint16(65400)
+		srv := startBFDDriver(t,
+			announcer.PeerSpec{Name: "bfd-peer", RemoteAddress: "127.0.0.1", RemoteASN: 65000, LocalAddress: "127.0.0.1"},
+			announcer.BfdSpec{Enabled: true, Port: &bfdPort},
+		)
+
+		ps := awaitPeerState(t, NewPeerStateSource(srv, logger), "127.0.0.1")
+		r := require.New(t)
+		r.True(ps.BfdEnabled)
+		r.Equal(uint32(0), ps.BfdState)
+	})
+
+	t.Run("BFD disabled leaves BfdEnabled=false BfdState=0", func(t *testing.T) {
+		srv := startBFDDriver(t,
+			announcer.PeerSpec{Name: "no-bfd", RemoteAddress: "127.0.0.1", RemoteASN: 65000, LocalAddress: "127.0.0.1"},
+			announcer.BfdSpec{Enabled: false},
+		)
+
+		ps := awaitPeerState(t, NewPeerStateSource(srv, logger), "127.0.0.1")
+		r := require.New(t)
+		r.False(ps.BfdEnabled)
+		r.Equal(uint32(0), ps.BfdState)
+	})
+}
+
+// TestCollectBfdState covers the defensive nil guard in the ListBfdPeer
+// callback: a nil *api.BfdPeerState leaves the peer BFD-disabled, a non-nil
+// state is recorded.
+func TestCollectBfdState(t *testing.T) {
+	r := require.New(t)
+	m := map[string]api.BfdSessionState{}
+
+	collectBfdState(m, "10.0.0.1", nil)
+	r.NotContains(m, "10.0.0.1")
+
+	collectBfdState(m, "10.0.0.2", &api.BfdPeerState{SessionState: api.BfdSessionState_BFD_SESSION_STATE_UP})
+	r.Contains(m, "10.0.0.2")
+	r.Equal(api.BfdSessionState_BFD_SESSION_STATE_UP, m["10.0.0.2"])
+}

@@ -32,10 +32,7 @@ func (s *peerStateSource) ListPeers(ctx context.Context) ([]announcer.PeerState,
 	// active BFD config, so a peer's presence here is the "BFD enabled" signal.
 	bfdStates := map[string]api.BfdSessionState{}
 	s.srv.ListBfdPeer(ctx, func(peerAddress string, state *api.BfdPeerState) {
-		if state == nil {
-			return
-		}
-		bfdStates[peerAddress] = state.GetSessionState()
+		collectBfdState(bfdStates, peerAddress, state)
 	})
 
 	if err := s.srv.ListPeer(ctx, &api.ListPeerRequest{}, func(p *api.Peer) {
@@ -54,6 +51,17 @@ func (s *peerStateSource) ListPeers(ctx context.Context) ([]announcer.PeerState,
 	}
 
 	return out, nil
+}
+
+// collectBfdState records the BFD session state of a single peer in m. A nil
+// *api.BfdPeerState (defensive: GoBGP always passes non-nil today) is skipped,
+// leaving the peer treated as BFD-disabled. Extracted so the nil guard is
+// directly unit-testable.
+func collectBfdState(m map[string]api.BfdSessionState, peerAddress string, state *api.BfdPeerState) {
+	if state == nil {
+		return
+	}
+	m[peerAddress] = state.GetSessionState()
 }
 
 // mapPeer maps a single v4 *api.Peer onto announcer.PeerState. A peer that

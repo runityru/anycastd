@@ -23,7 +23,7 @@ func TestNewPeer(t *testing.T) {
 		name            string
 		peer            announcer.PeerSpec
 		expLocalAddress string
-		expRemotePort   uint32
+		expRemotePort   uint16
 	}{
 		{
 			name: "IPv4 peer",
@@ -81,7 +81,7 @@ func TestNewPeer(t *testing.T) {
 			r.Equal(uint32(2), p.EbgpMultihop.MultihopTtl)
 			r.NotNil(p.Transport)
 			r.Equal(tc.expLocalAddress, p.Transport.LocalAddress)
-			r.Equal(tc.expRemotePort, p.Transport.RemotePort)
+			r.Equal(uint32(tc.expRemotePort), p.Transport.RemotePort)
 			r.Equal(uint64(5), p.Timers.Config.ConnectRetry)
 		})
 	}
@@ -159,7 +159,7 @@ func newTestLogger(t testing.TB) *log.Logger {
 
 // startTestPeer runs a second in-memory BgpServer on a free loopback port in
 // PassiveMode, so the driver under test dials it via RemotePort.
-func startTestPeer(t *testing.T, loopback string, peerASN uint32) (*server.BgpServer, uint32) {
+func startTestPeer(t *testing.T, loopback string, peerASN uint32) (*server.BgpServer, uint16) {
 	t.Helper()
 	r := require.New(t)
 	ctx := t.Context()
@@ -180,7 +180,7 @@ func startTestPeer(t *testing.T, loopback string, peerASN uint32) (*server.BgpSe
 		Conf:      &api.PeerConf{NeighborAddress: loopback, PeerAsn: 64512},
 		Transport: &api.Transport{PassiveMode: true},
 	}}))
-	return srv, uint32(port)
+	return srv, uint16(port)
 }
 
 // awaitEstablished polls ListPeers until the peer at addr reports an

@@ -42,7 +42,7 @@ type PeerSpec struct {
 	// value) means the BGP default of 179. It is useful for testing against a
 	// peer listening on an ephemeral port, and is a legitimate BGP feature for
 	// non-standard session ports.
-	RemotePort uint32
+	RemotePort uint16
 }
 
 // MessageCounter counts messages exchanged with a peer.

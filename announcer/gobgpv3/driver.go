@@ -128,8 +128,9 @@ func newPeer(peer announcer.PeerSpec) *apipb.Peer {
 
 	// A non-zero RemotePort overrides the BGP default of 179 (used for tests
 	// against a peer on an ephemeral port, and for non-standard session ports).
+	// GoBGP's API uses uint32; widening the 16-bit PeerSpec port is safe.
 	if peer.RemotePort != 0 {
-		p.Transport.RemotePort = peer.RemotePort
+		p.Transport.RemotePort = uint32(peer.RemotePort)
 	}
 
 	return p

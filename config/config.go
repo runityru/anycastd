@@ -85,17 +85,23 @@ type Bfd struct {
 // announcer/gobgpv4 provably safe.
 const maxBfdInterval = th.Duration(4294967295 * time.Microsecond)
 
+// minBfdInterval is the smallest BFD transmit/receive interval we accept
+// (50ms). The RFC 5880 wire format allows far smaller values, but sub-50ms
+// timers are an anti self-DoS: aggressive detection timers risk flooding the
+// peer and burning CPU for little detection-speed benefit.
+const minBfdInterval = th.Duration(50 * time.Millisecond)
+
 func (b Bfd) Validate() error {
 	return validation.ValidateStruct(&b,
 		validation.Field(&b.Port,
 			validation.When(b.Enabled, validation.Min(uint16(1)).ValidateEmpty(), validation.Max(uint16(65535)).ValidateEmpty())),
 		validation.Field(&b.MinTxInterval,
 			validation.When(b.Enabled,
-				validation.Min(th.Millisecond).ValidateEmpty(),
+				validation.Min(minBfdInterval).ValidateEmpty(),
 				validation.Max(maxBfdInterval).ValidateEmpty())),
 		validation.Field(&b.MinRxInterval,
 			validation.When(b.Enabled,
-				validation.Min(th.Millisecond).ValidateEmpty(),
+				validation.Min(minBfdInterval).ValidateEmpty(),
 				validation.Max(maxBfdInterval).ValidateEmpty())),
 		validation.Field(&b.Multiplier,
 			validation.When(b.Enabled,

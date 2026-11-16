@@ -254,12 +254,19 @@ func TestBfdValidation(t *testing.T) {
 	r.NoError((Bfd{Enabled: true, Port: uint16ptr(1)}).Validate())
 	r.NoError((Bfd{Enabled: true, Port: uint16ptr(65535)}).Validate())
 
-	// Enabled BFD rejects intervals below the 1ms floor.
+	// Enabled BFD rejects intervals below the 50ms floor (anti self-DoS).
 	us := th.Duration(500 * time.Microsecond)
 	r.Error((Bfd{Enabled: true, MinTxInterval: &us}).Validate())
 	r.Error((Bfd{Enabled: true, MinRxInterval: &us}).Validate())
-	ms := th.Duration(time.Millisecond)
-	r.NoError((Bfd{Enabled: true, MinTxInterval: &ms}).Validate())
+	oneMs := th.Duration(time.Millisecond)
+	r.Error((Bfd{Enabled: true, MinTxInterval: &oneMs}).Validate())
+	r.Error((Bfd{Enabled: true, MinRxInterval: &oneMs}).Validate())
+	subFloor := th.Duration(49 * time.Millisecond)
+	r.Error((Bfd{Enabled: true, MinTxInterval: &subFloor}).Validate())
+	r.Error((Bfd{Enabled: true, MinRxInterval: &subFloor}).Validate())
+	floor := th.Duration(50 * time.Millisecond)
+	r.NoError((Bfd{Enabled: true, MinTxInterval: &floor}).Validate())
+	r.NoError((Bfd{Enabled: true, MinRxInterval: &floor}).Validate())
 
 	// Enabled BFD rejects intervals above the uint32-µs protocol limit (~71.6 min).
 	atMax := th.Duration(4294967295 * time.Microsecond)

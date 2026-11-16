@@ -151,13 +151,19 @@ automatically from `peer.enable_multihop`) BFD runs in multihop mode.
 | Field              | Type       | Default            | Notes                                                                       |
 | ------------------ | ---------- | ------------------ | --------------------------------------------------------------------------- |
 | `enabled`          | `bool`     | `false`            | Master switch for BFD                                                       |
-| `port`             | `uint16`   | `3784` / `4784`    | UDP port. Default `3784` single-hop, `4784` multihop; range `1..65535`      |
+| `port`             | `uint16`   | `3784` / `4784`    | Destination UDP port sent to the peer; default `3784` single-hop, `4784` multihop; range `1..65535` |
 | `min_tx_interval`  | `duration` | GoBGP `1s`         | Minimum transmit interval. Config is in **milliseconds** (e.g. `300ms`); floor `1ms` |
 | `min_rx_interval`  | `duration` | GoBGP `1s`         | Minimum receive interval. Config is in **milliseconds** (e.g. `300ms`); floor `1ms` |
 | `multiplier`       | `uint32`   | `3`                | Detection multiplier; floor `>= 1`                                          |
 
 Multihop is **not** configured inside `bfd` — it is derived from the peer's
 `enable_multihop` automatically.
+
+**`port` semantics**: `announcer.bfd.port` is the **destination** port that
+anycastd sends BFD packets **to the peer**; the receiving socket on the GoBGP
+side is always fixed at `3784` (single-hop) / `4784` (multihop). The setting is
+**global for all peers** — a different port cannot be used for single-hop and
+multihop peers at the same time; in practice rely on the default.
 
 **Peer local address**: a BFD session can only be established when the peer has
 a valid local address at `AddPeer` time. Operators enabling BFD should therefore

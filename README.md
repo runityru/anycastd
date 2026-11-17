@@ -82,6 +82,8 @@ announcer:
 services:
   - name: http
     check_interval: 10s
+    announce_threshold: 1 # optional, default 1 (announce after N consecutive healthy ticks)
+    denounce_threshold: 1 # optional, default 1 (denounce after M consecutive failing ticks)
     checks:
       - kind: dns_lookup
         spec:
@@ -187,6 +189,34 @@ peers keep receiving it. anycastd does **not** withdraw the announcement.
 required** (ports are > 1024 and the container runs as `USER 65534`). BFD must
 be enabled on **both** sides to come up. Like BGP, BFD is **not
 authenticated**.
+
+## Hysteresis (anti-flap)
+
+By default anycastd announces/withdraws a prefix immediately whenever the
+service health flips. For a briefly wavering check this causes BGP route
+flapping (repeated UPDATEs, and on the wire a route that flickers). Per-service
+`announce_threshold` / `denounce_threshold` implement **anti-flap hysteresis**:
+
+* the service is announced only after `announce_threshold` **consecutive**
+  healthy ticks, and withdrawn only after `denounce_threshold` **consecutive**
+  failing ticks;
+* a streak resets when the sign flips (one healthy tick cancels the failing
+  streak and vice versa);
+* both default to `1` (immediate, the legacy behaviour); a zero value in the
+  config is treated as the default.
+
+The thresholds are independent — any positive values are allowed. Setting
+`denounce_threshold` smaller than `announce_threshold` yields a fast-withdraw
+(fail-closed) configuration: a failing service is withdrawn quicker than a
+recovering one is re-announced.
+
+**Note on failover latency:** the time to withdraw after a real outage is
+`denounce_threshold × check_interval`, and to re-announce after recovery is
+`announce_threshold × check_interval`. A large `denounce_threshold` delays
+withdrawal, so traffic keeps flowing to a dead node until the window elapses —
+set it consciously. `anycastd_service_up` always reflects the **raw** health
+every tick (unaffected by thresholds) and may diverge from the actual
+announced state while a streak is below its threshold.
 
 ## GoBGP engine & security notice
 

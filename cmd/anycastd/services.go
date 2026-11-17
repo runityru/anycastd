@@ -53,6 +53,16 @@ func buildServices(
 			return nil, nil, errors.Wrapf(err, "error getting strategy for service %q", svcCfg.Name)
 		}
 
+		// AttemptTracker thresholds default to 1/1 (immediate) when unset (0).
+		announceThreshold := svcCfg.AnnounceThreshold
+		if announceThreshold == 0 {
+			announceThreshold = 1
+		}
+		denounceThreshold := svcCfg.DenounceThreshold
+		if denounceThreshold == 0 {
+			denounceThreshold = 1
+		}
+
 		svc := service.New(
 			svcCfg.Name,
 			a,
@@ -60,6 +70,7 @@ func buildServices(
 			svcCfg.CheckInterval.TimeDuration(),
 			metrics,
 			strategy,
+			service.WithAttemptTracker(announceThreshold, denounceThreshold),
 		)
 
 		services = append(services, svc)

@@ -22,14 +22,31 @@ type Checker struct {
 }
 
 type service struct {
-	name      string
-	announcer announcer.Announcer
-	checks    []Checker
-	interval  time.Duration
-	metrics   Metrics
-	strategy  Strategy
+	name           string
+	announcer      announcer.Announcer
+	checks         []Checker
+	interval       time.Duration
+	metrics        Metrics
+	strategy       Strategy
+	attemptTracker AttemptTracker
 
 	announced *atomic.Bool
+}
+
+// Option configures a Service built by New. Options are applied after the
+// defaults, so a later option wins.
+type Option func(*service)
+
+// WithAttemptTracker returns an Option that gates Announce/Denounce transitions on
+// N consecutive successes and M consecutive failures. N and M are independent
+// positive values (validated by config.Service.Validate); a zero N/M behaves
+// like 1/1 (immediate). Callers are expected to pass the validated, defaulted
+// values from configuration. Without this option New applies the default 1/1
+// (announce/denounce immediately, legacy behaviour).
+func WithAttemptTracker(n, m int) Option {
+	return func(s *service) {
+		s.attemptTracker = NewAttemptTracker(n, m)
+	}
 }
 
 func New(
@@ -39,16 +56,24 @@ func New(
 	interval time.Duration,
 	metrics Metrics,
 	strategy Strategy,
+	opts ...Option,
 ) Service {
-	return &service{
-		name:      name,
-		announcer: a,
-		checks:    checks,
-		interval:  interval,
-		metrics:   metrics,
-		strategy:  strategy,
-		announced: &atomic.Bool{},
+	s := &service{
+		name:           name,
+		announcer:      a,
+		checks:         checks,
+		interval:       interval,
+		metrics:        metrics,
+		strategy:       strategy,
+		attemptTracker: NewAttemptTracker(1, 1),
+		announced:      &atomic.Bool{},
 	}
+
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	return s
 }
 
 func (s *service) Run(ctx context.Context) error {
@@ -86,20 +111,24 @@ func (s *service) run(ctx context.Context) error {
 		s.metrics.ServiceUp(s.name)
 	}
 
-	if serviceDown {
-		if s.announced.Load() {
-			if err := s.announcer.Denounce(ctx); err != nil {
-				log.Warnf("denounce failed: %s", err)
-			} else {
-				s.announced.Store(false)
-			}
-		}
-	} else {
+	// AttemptTracker decides whether to announce/denounce this tick. The
+	// announced flag guards the side effect so it fires exactly once per
+	// transition; the decide call itself stays idempotent per tick.
+	switch s.attemptTracker.decide(serviceDown) {
+	case transitionAnnounce:
 		if !s.announced.Load() {
 			if err := s.announcer.Announce(ctx); err != nil {
 				log.Warnf("announce failed: %s", err)
 			} else {
 				s.announced.Store(true)
+			}
+		}
+	case transitionDenounce:
+		if s.announced.Load() {
+			if err := s.announcer.Denounce(ctx); err != nil {
+				log.Warnf("denounce failed: %s", err)
+			} else {
+				s.announced.Store(false)
 			}
 		}
 	}

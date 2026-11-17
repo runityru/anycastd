@@ -292,3 +292,52 @@ func TestBfdValidation(t *testing.T) {
 func uint16ptr(v uint16) *uint16 { return &v }
 
 func uint32ptr(v uint32) *uint32 { return &v }
+
+func TestServiceAttemptTrackerValidation(t *testing.T) {
+	r := require.New(t)
+
+	base := func() Service {
+		return Service{
+			Name:          "svc",
+			CheckInterval: th.Duration(time.Second),
+			Checks:        []Check{{Kind: "http_2xx", Spec: json.RawMessage(`{}`)}},
+		}
+	}
+
+	t.Run("unset thresholds default to valid 1/1", func(t *testing.T) {
+		r.NoError(base().Validate())
+	})
+	t.Run("equal thresholds valid", func(t *testing.T) {
+		s := base()
+		s.AnnounceThreshold = 3
+		s.DenounceThreshold = 3
+		r.NoError(s.Validate())
+	})
+	t.Run("announce below denounce valid", func(t *testing.T) {
+		s := base()
+		s.AnnounceThreshold = 1
+		s.DenounceThreshold = 5
+		r.NoError(s.Validate())
+	})
+	t.Run("announce above denounce valid (fast withdraw, 5/2)", func(t *testing.T) {
+		s := base()
+		s.AnnounceThreshold = 5
+		s.DenounceThreshold = 2
+		r.NoError(s.Validate())
+	})
+	t.Run("unset announce with denounce>1 is valid (default 1)", func(t *testing.T) {
+		s := base()
+		s.DenounceThreshold = 3 // announce unset -> default 1 -> 1 <= 3
+		r.NoError(s.Validate())
+	})
+	t.Run("negative announce rejected", func(t *testing.T) {
+		s := base()
+		s.AnnounceThreshold = -1
+		r.Error(s.Validate())
+	})
+	t.Run("negative denounce rejected", func(t *testing.T) {
+		s := base()
+		s.DenounceThreshold = -1
+		r.Error(s.Validate())
+	})
+}

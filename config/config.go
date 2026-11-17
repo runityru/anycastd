@@ -212,18 +212,27 @@ func (p Peer) isIPv6() bool {
 }
 
 type Service struct {
-	Name            string          `json:"name"`
-	CheckInterval   th.Duration     `json:"check_interval"`
-	Strategy        string          `json:"strategy"`
-	StrategyOptions json.RawMessage `json:"strategy_options"`
-	Checks          []Check         `json:"checks"`
+	Name              string          `json:"name"`
+	CheckInterval     th.Duration     `json:"check_interval"`
+	Strategy          string          `json:"strategy"`
+	StrategyOptions   json.RawMessage `json:"strategy_options"`
+	Checks            []Check         `json:"checks"`
+	AnnounceThreshold int             `json:"announce_threshold"`
+	DenounceThreshold int             `json:"denounce_threshold"`
 }
 
+// AttemptTracker thresholds: a zero value means "unset" and is treated as the
+// default 1 (applied at build time in cmd/anycastd). Any positive values are
+// accepted, including announce_threshold > denounce_threshold, which yields a
+// fast-withdraw (fail-closed) configuration where a service is withdrawn
+// quicker than it is announced.
 func (s Service) Validate() error {
 	return validation.ValidateStruct(&s,
 		validation.Field(&s.Name, validation.Required),
 		validation.Field(&s.CheckInterval, validation.Required),
 		validation.Field(&s.Checks, validation.Required),
+		validation.Field(&s.AnnounceThreshold, validation.When(s.AnnounceThreshold != 0, validation.Min(1))),
+		validation.Field(&s.DenounceThreshold, validation.When(s.DenounceThreshold != 0, validation.Min(1))),
 	)
 }
 

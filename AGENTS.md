@@ -99,6 +99,12 @@ adding/removing targets.
 * `announcer.bfd` (per-announcer) enables BFD to each peer. **GoBGP v4 only**;
   `enabled: true` with `engine: gobgpv3` is a config error (fail-closed).
   Multihop mode is derived from `peer.enable_multihop` (not set inside `bfd`).
+* Per-service `announce_threshold` / `denounce_threshold` (`int`, JSON)
+  implement anti-flap hysteresis on announce/denounce. Both default to `1`
+  (immediate, legacy behaviour); `0` means unset → default `1`; any positive
+  values are accepted (independent, so `denounce_threshold <
+  announce_threshold` is a valid fast-withdraw configuration). Implemented by
+  `service.AttemptTracker`.
 
 ## Security constraints (do not silently change)
 

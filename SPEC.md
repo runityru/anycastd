@@ -123,6 +123,8 @@ services: # required, at least one
     check_interval: 10s # required
     strategy: at_least_one # optional, default "at_least_one"
     strategy_options: {} # optional, JSON blob
+    announce_threshold: 1 # optional, default 1 (announce after N consecutive healthy ticks)
+    denounce_threshold: 1 # optional, default 1 (denounce after M consecutive failing ticks)
     checks: # required, at least one
       - kind: http_2xx # required
         spec: { ... } # required, JSON blob
@@ -216,13 +218,34 @@ GoBGP API, BFD uses **microseconds** per RFC 5880. Local detection time is
 
 ### 3.5 `service`
 
-| Field              | Type            | Required | Notes                                                                                         |
-| ------------------ | --------------- | -------- | --------------------------------------------------------------------------------------------- |
-| `name`             | `string`        | yes      | Service name (used in metrics labels)                                                         |
-| `check_interval`   | `time.Duration` | yes      | Interval between check rounds                                                                 |
-| `strategy`         | `string`        | no       | One of `all`, `at_least_one`, `all_in_group`, `at_least_n_percentage`; default `at_least_one` |
-| `strategy_options` | JSON blob       | no       | Consumed by strategies that need parameters (e.g. `n` for `at_least_n_percentage`)            |
-| `checks`           | `[]Check`       | yes      | At least one check                                                                            |
+| Field                | Type            | Required | Notes                                                                                         |
+| ------------------   | --------------- | -------- | --------------------------------------------------------------------------------------------- |
+| `name`               | `string`        | yes      | Service name (used in metrics labels)                                                         |
+| `check_interval`     | `time.Duration` | yes      | Interval between check rounds                                                                 |
+| `strategy`           | `string`        | no       | One of `all`, `at_least_one`, `all_in_group`, `at_least_n_percentage`; default `at_least_one` |
+| `strategy_options`   | JSON blob       | no       | Consumed by strategies that need parameters (e.g. `n` for `at_least_n_percentage`)            |
+| `announce_threshold` | `int`           | no       | Announce after N consecutive healthy ticks; default `1` (immediate); `>= 1`                   |
+| `denounce_threshold` | `int`           | no       | Denounce after M consecutive failing ticks; default `1` (immediate); `>= 1`                   |
+| `checks`             | `[]Check`       | yes      | At least one check                                                                            |
+
+**Anti-flap (attempt tracker):** `announce_threshold` and `denounce_threshold`
+implement anti-flap hysteresis on the announce/denounce lifecycle. The service
+is announced only after `announce_threshold` consecutive healthy ticks and
+withdrawn only after `denounce_threshold` consecutive failing ticks; a streak
+resets when the sign flips. Both default to `1` (a zero value in the config is
+treated as the default), which preserves the legacy immediate behaviour. The
+two thresholds are **independent** — any positive values are accepted,
+including `announce_threshold > denounce_threshold`, which yields a
+fast-withdraw (fail-closed) configuration where a failing service is withdrawn
+quicker than it is re-announced.
+
+**Failover latency:** the time to withdraw a prefix after a real outage is
+`denounce_threshold × check_interval`, and the time to re-announce after
+recovery is `announce_threshold × check_interval`. A large `denounce_threshold`
+delays withdrawal, so traffic keeps flowing to a dead node until the window
+elapses — set it consciously. `anycastd_service_up` reflects the **raw** health
+check every tick (unaffected by thresholds), so it may diverge from the actual
+announced/withdrawn state while a streak is below its threshold.
 
 **Strategies** (implemented in `service/strategy.go`, type
 `Strategy func([]CheckResult) (bool, error)` where the returned `bool` means
@@ -295,14 +318,25 @@ The `service.Service.Run` loop ticks every `check_interval` and runs one
    check that returns an error is recorded as **failed**.
 2. Feed the collected `CheckResult` list to the strategy. The strategy returns
    `serviceDown` (bool).
-3. Record `anycastd_service_up{service}` as `1`/`0`.
-4. If `serviceDown` and the announcer was previously in the announced state
-   (`announced *atomic.Bool`), call `announcer.Denounce(ctx)` and clear the flag.
-5. If the service is up and not currently announced, call
-   `announcer.Announce(ctx)` and set the flag.
+3. Record `anycastd_service_up{service}` as `1`/`0` — this reflects the **raw**
+   strategy result every tick, regardless of anti-flap thresholds.
+4. Feed `serviceDown` to the attempt tracker (`service.AttemptTracker`). It
+   tracks consecutive healthy/failing streaks and returns one of `hold`,
+   `announce`, or `denounce`:
+   * `announce` only after `announce_threshold` consecutive healthy ticks;
+   * `denounce` only after `denounce_threshold` consecutive failing ticks;
+   * a streak resets when the sign flips; on cold start a healthy service
+     announces on its first tick.
+5. On `announce`, if the announcer was not previously announced, call
+   `announcer.Announce(ctx)` and set `announced`; on `denounce`, if it was
+   announced, call `announcer.Denounce(ctx)` and clear the flag.
 
-This is **stateful**: prefixes are only re-announced/withdrawn on a state
-transition, not on every tick.
+This is **stateful**: prefixes are only re-announced/withdrawn on a hysteresis
+transition, not on every tick. `anycastd_service_up` (step 3) records the raw
+health every tick and may therefore diverge from the actual announced state
+while a streak is below its threshold. The announce/denounce side effect fires
+at most once per transition; on a failed side effect the flag is not changed so
+the transition is retried on the next tick.
 
 ### 4.3 Announce / denounce mechanics (announcer)
 

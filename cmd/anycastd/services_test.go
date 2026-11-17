@@ -108,7 +108,7 @@ func TestBuildServicesRunsAnnouncerWithPrefixes(t *testing.T) {
 	r.NoError(err)
 	r.Len(services, 1)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 
 	done := make(chan struct{})
 	go func() {

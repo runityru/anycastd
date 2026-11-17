@@ -1,7 +1,6 @@
 package announcer
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -14,7 +13,7 @@ import (
 func TestDriverMockSatisfiesInterfaces(t *testing.T) {
 	r := require.New(t)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	d := NewDriverMock()
 
 	d.On("Serve").Return(nil)
@@ -52,7 +51,7 @@ func TestDriverMockAsPeerStateSourceForMetrics(t *testing.T) {
 		{NeighborAddress: "10.0.0.2", SessionState: 6, AdminState: 0, BfdEnabled: true, BfdState: 1},
 	}, nil)
 
-	peers, err := d.ListPeers(context.Background())
+	peers, err := d.ListPeers(t.Context())
 	r.NoError(err)
 	r.Len(peers, 1)
 	r.Equal("10.0.0.2", peers[0].NeighborAddress)

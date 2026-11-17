@@ -107,7 +107,7 @@ func TestCheckReusesKeepAliveConnection(t *testing.T) {
 		},
 	}
 	go func() { _ = srv.Serve(ln) }()
-	defer srv.Close()
+	defer func() { _ = srv.Close() }()
 
 	c, err := New(spec{
 		URL:      "http://" + ln.Addr().String() + "/ping",

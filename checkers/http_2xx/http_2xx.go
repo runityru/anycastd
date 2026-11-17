@@ -16,7 +16,15 @@ import (
 
 var _ checkers.Checker = (*http_2xx)(nil)
 
-const checkName = "http_2xx"
+const (
+	checkName = "http_2xx"
+
+	// readDrainLimit caps how much of the response body is drained before the
+	// connection is closed. Bounded draining lets the transport reuse the
+	// keep-alive connection for the common case of a small health-check body
+	// while avoiding unbounded reads of a misbehaving endpoint.
+	readDrainLimit = 1 << 20 // 1 MiB
+)
 
 func init() {
 	checkers.MustRegister(checkName, NewFromSpec)
@@ -125,6 +133,16 @@ func (h *http_2xx) check(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	// Always drain a bounded amount of the response body and close it. This
+	// releases the connection back to the transport's keep-alive pool for the
+	// common case of a small health-check body and prevents the connection /
+	// file-descriptor leak that would otherwise accumulate if resp.Body is
+	// never closed. Runs on every return path (both 2xx and non-2xx).
+	defer func() {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, readDrainLimit))
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return errors.Errorf("Unexpected code received: %d", resp.StatusCode)

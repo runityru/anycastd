@@ -194,8 +194,17 @@ func (s *serviceTestSuite) TestRunContextCancelledPreCancel() {
 	strategy, _ := GetStrategyNoOptions("")
 	svc := New("test_service", s.announcerM, []Checker{{s.checkM, ""}}, 1*time.Second, s.metricsM, strategy)
 
-	err := svc.Run(ctx)
-	s.Require().NoError(err)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- svc.Run(ctx)
+	}()
+
+	select {
+	case err := <-errCh:
+		s.Require().NoError(err)
+	case <-time.After(5 * time.Second):
+		s.Fail("Run did not return for an already-cancelled context")
+	}
 }
 
 // TestRunContextCancelledFromGoroutine verifies Run returns nil when the context
@@ -219,6 +228,50 @@ func (s *serviceTestSuite) TestRunContextCancelledFromGoroutine() {
 	case <-time.After(5 * time.Second):
 		s.Fail("Run did not return after context cancellation")
 	}
+}
+
+// TestRunExecutesSuccessfulTickThenExitsOnCancel verifies that Run runs at
+// least one successful tick (announcing and recording the announced metric)
+// and keeps looping, then returns nil once the context is cancelled. This
+// guards the core loop against a mutation that returns after the first
+// successful tick instead of continuing.
+func (s *serviceTestSuite) TestRunExecutesSuccessfulTickThenExitsOnCancel() {
+	s.announcerM.On("Announce").Return(nil).Once()
+
+	// The loop ticks repeatedly (every 1ms) until the context is cancelled, so
+	// the per-tick calls may happen any number of times; the Announce side
+	// effect fires exactly once when the healthy tick first crosses the
+	// threshold.
+	s.checkM.On("Kind").Return("test_check").Maybe()
+	s.checkM.On("Check").Return(nil).Maybe()
+	s.metricsM.On("ServiceUp", "test_service").Return().Maybe()
+	s.metricsM.On("ServiceAnnounced", "test_service", true).Return().Maybe()
+	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Maybe()
+
+	strategy, _ := GetStrategyNoOptions("")
+	svc := New("test_service", s.announcerM, []Checker{{s.checkM, ""}}, time.Millisecond, s.metricsM, strategy).(*service)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- svc.Run(ctx)
+	}()
+
+	// Wait until the successful tick has announced and recorded the gauge.
+	s.Require().Eventually(func() bool {
+		return svc.announced.Load()
+	}, 2*time.Second, 10*time.Millisecond)
+
+	cancel()
+
+	select {
+	case err := <-errCh:
+		s.Require().NoError(err)
+	case <-time.After(5 * time.Second):
+		s.Fail("Run did not return after context cancellation")
+	}
+
+	s.Require().True(svc.announced.Load(), "service should remain announced after the successful tick")
 }
 
 // TestRunStrategyError verifies that a strategy error surfaced through run is

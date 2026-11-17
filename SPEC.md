@@ -277,8 +277,10 @@ _service is down_):
    * resolve the strategy,
    * create and run a `service.New(...)` in the errgroup.
 10. If metrics are enabled:
-    * register the Prometheus handler and
-      `http.ListenAndServe(metrics.address, nil)`,
+    * build an `http.Server` with explicit timeouts (`ReadHeaderTimeout: 10s`,
+      `ReadTimeout: 10s`, `WriteTimeout: 30s`, `IdleTimeout: 120s`) serving
+      the Prometheus handler, run via `ListenAndServe` on its own goroutine
+      (shut down explicitly during shutdown),
     * create and run `announcer.NewMetricsRepository(driver, ...)` (GoBGP
       metrics poller, reading peer state through the driver's `PeerStateSource`).
 11. `g.Wait()` — block until the context is cancelled or a goroutine errors.
@@ -556,9 +558,10 @@ The security posture is **honest and limited by design**:
   `remote.insecure: true`, which **disables server-certificate verification**
   for that check — treat it as security-relevant and use it only for
   testing/internal targets.
-* **Open metrics endpoint.** The metrics HTTP server is started with
-  `http.ListenAndServe(metrics.address, nil)` — **no TLS, no authentication,
-  no read/write timeouts**. Bind it to a loopback or protected interface.
+* **Open metrics endpoint.** The metrics HTTP server is started as an
+  `http.Server` with explicit timeouts (`ReadHeaderTimeout: 10s`,
+  `ReadTimeout: 10s`, `WriteTimeout: 30s`, `IdleTimeout: 120s`) — **no TLS, no
+  authentication**. Bind it to a loopback or protected interface.
 * **Configuration contains no secrets.** Only `CONFIG_PATH` and `LOG_LEVEL`
   are read from the environment; the config file holds no credentials.
 * **No external gRPC listener.** GoBGP is started with `ListenPort: -1`, so the

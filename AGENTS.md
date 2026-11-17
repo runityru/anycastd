@@ -105,8 +105,9 @@ adding/removing targets.
 * Peer authentication is **not** supported (no password/MD5/TLS in `config.Peer`).
 * BFD (when enabled) uses UDP `3784` (single-hop) / `4784` (multihop) and is
   **not authenticated** (like BGP). No root is required (ports `> 1024`).
-* The metrics endpoint has **no TLS/auth/timeouts**
-  (`http.ListenAndServe(addr, nil)`).
+* The metrics endpoint has **no TLS/auth** and is served by an `http.Server`
+  with explicit timeouts (`ReadHeaderTimeout: 10s`, `ReadTimeout: 10s`,
+  `WriteTimeout: 30s`, `IdleTimeout: 120s`), not `http.ListenAndServe(addr, nil)`.
 * GoBGP is started with `ListenPort: -1` (no external gRPC listener).
 * The container runs as non-root `USER 65534:65534` in the Dockerfile.
 * CI runs security linters (`gosec`, `govulncheck`) as non-failing steps. If you

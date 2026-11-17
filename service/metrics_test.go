@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,7 +19,7 @@ func newTestMetrics(t *testing.T, appVersion string) (*metrics, *prometheus.Regi
 	t.Helper()
 
 	reg := prometheus.NewRegistry()
-	m, err := NewMetrics(reg, appVersion)
+	m, err := NewMetrics(appVersion, WithRegisterer(reg))
 	require.NoError(t, err)
 
 	mm, ok := m.(*metrics)
@@ -110,12 +111,52 @@ func TestMetricsMeasureCallError(t *testing.T) {
 func TestMetricsNewMetricsDuplicateRegistration(t *testing.T) {
 	reg := prometheus.NewRegistry()
 
-	_, err := NewMetrics(reg, "v1")
+	_, err := NewMetrics("v1", WithRegisterer(reg))
 	require.NoError(t, err)
 
-	_, err = NewMetrics(reg, "v1")
+	_, err = NewMetrics("v1", WithRegisterer(reg))
 	require.Error(t, err)
 
 	var already prometheus.AlreadyRegisteredError
 	require.ErrorAs(t, err, &already)
+}
+
+// TestMetricsWithRegistererNilDefaultsToDefaultRegisterer asserts that passing
+// WithRegisterer(nil) behaves exactly like the default: the option resolves a
+// nil registerer to prometheus.DefaultRegisterer. The option closure is
+// exercised directly so the (global) default registerer is never written to.
+func TestMetricsWithRegistererNilDefaultsToDefaultRegisterer(t *testing.T) {
+	m := &metrics{}
+	WithRegisterer(nil)(m)
+	require.Equal(t, prometheus.DefaultRegisterer, m.registerer)
+}
+
+// TestMetricsWithRegistererAppliesToProvidedRegistry kills a mutation where
+// WithRegisterer is ignored (e.g. registration leaking onto the global default
+// registerer): the supplied hermetic registry must actually receive the
+// collectors.
+func TestMetricsWithRegistererAppliesToProvidedRegistry(t *testing.T) {
+	reg := prometheus.NewRegistry()
+
+	_, err := NewMetrics("v1", WithRegisterer(reg))
+	require.NoError(t, err)
+
+	families, err := reg.Gather()
+	require.NoError(t, err)
+	require.NotEmpty(t, families, "collectors must be registered on the provided registry, not the default one")
+}
+
+// TestMetricsCollectsExpectedFamilies kills a mutation that drops the
+// registration of a collector (the object-valued gauge tests still pass even if
+// a collector is never registered). Gathering the registry proves anycastd_up
+// is actually exported.
+func TestMetricsCollectsExpectedFamilies(t *testing.T) {
+	_, reg := newTestMetrics(t, "1.2.3")
+
+	expected := `
+# HELP anycastd_up Application liveness status (must always be 1)
+# TYPE anycastd_up gauge
+anycastd_up{version="1.2.3"} 1
+`
+	require.NoError(t, testutil.GatherAndCompare(reg, strings.NewReader(expected), "anycastd_up"))
 }

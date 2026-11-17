@@ -128,7 +128,7 @@ func main() {
 		panic(err)
 	}
 
-	metrics, err := service.NewMetrics(prometheus.DefaultRegisterer, appVersion)
+	metrics, err := service.NewMetrics(appVersion)
 	if err != nil {
 		panic(err)
 	}

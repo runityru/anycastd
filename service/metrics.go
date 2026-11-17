@@ -15,14 +15,33 @@ type Metrics interface {
 }
 
 type metrics struct {
+	registerer           prometheus.Registerer
 	appUpGauge           *prometheus.GaugeVec
 	upGauge              *prometheus.GaugeVec
 	checkDurationSeconds *prometheus.GaugeVec
 }
 
-func NewMetrics(reg prometheus.Registerer, appVersion string) (Metrics, error) {
-	if reg == nil {
-		reg = prometheus.DefaultRegisterer
+// MetricsOption configures a Metrics built by NewMetrics. Options are applied
+// after the defaults, so a later option wins.
+type MetricsOption func(*metrics)
+
+// WithRegisterer sets the prometheus.Registerer the collectors are registered
+// to. A nil registerer (explicit or the default) resolves to
+// prometheus.DefaultRegisterer, matching the legacy behaviour.
+func WithRegisterer(reg prometheus.Registerer) MetricsOption {
+	return func(m *metrics) {
+		if reg == nil {
+			reg = prometheus.DefaultRegisterer
+		}
+		m.registerer = reg
+	}
+}
+
+func NewMetrics(appVersion string, opts ...MetricsOption) (Metrics, error) {
+	m := &metrics{registerer: prometheus.DefaultRegisterer}
+
+	for _, opt := range opts {
+		opt(m)
 	}
 
 	appUpGauge := prometheus.NewGaugeVec(
@@ -52,19 +71,19 @@ func NewMetrics(reg prometheus.Registerer, appVersion string) (Metrics, error) {
 		[]string{"service", "check"},
 	)
 
-	for _, m := range []prometheus.Collector{appUpGauge, upGauge, checkDurationSeconds} {
-		if err := reg.Register(m); err != nil {
+	for _, mc := range []prometheus.Collector{appUpGauge, upGauge, checkDurationSeconds} {
+		if err := m.registerer.Register(mc); err != nil {
 			return nil, err
 		}
 	}
 
 	appUpGauge.WithLabelValues(appVersion).Set(1)
 
-	return &metrics{
-		appUpGauge:           appUpGauge,
-		upGauge:              upGauge,
-		checkDurationSeconds: checkDurationSeconds,
-	}, nil
+	m.appUpGauge = appUpGauge
+	m.upGauge = upGauge
+	m.checkDurationSeconds = checkDurationSeconds
+
+	return m, nil
 }
 
 func (m *metrics) ServiceUp(service string) {

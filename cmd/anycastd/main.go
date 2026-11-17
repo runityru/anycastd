@@ -117,9 +117,16 @@ func main() {
 	// so Serve is intentionally excluded from the cancellable errgroup `g`
 	// above: that group must finish during shutdown, which a never-returning
 	// Serve would prevent. Serve is terminated by driver.Stop() in shutdown().
+	//
+	// A non-nil Serve error is a fatal trigger: if the BGP server dies on its
+	// own, the process must be stopped (via stop()) so the anycast prefixes are
+	// withdrawn instead of silently hanging with no peer advertising them. A nil
+	// return is a normal stop after driver.Stop() and must not cancel the
+	// context.
 	go func() {
 		if err := driver.Serve(); err != nil {
 			log.Errorf("BGP server Serve exited with error: %s", err)
+			stop()
 		}
 	}()
 

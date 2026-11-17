@@ -40,7 +40,12 @@ func shutdown(
 ) {
 	// 1. Stop the health-check and metrics loops and wait for them to exit.
 	cancelRun()
-	g.Wait()
+	if err := g.Wait(); err != nil {
+		// A failing health/metrics loop is logged (and would already have been
+		// reported by the errgroup watcher in main); shutdown still proceeds so
+		// prefixes are withdrawn and BGP is stopped regardless.
+		log.Warnf("service/metrics loop exited with error during shutdown: %s", err)
+	}
 
 	// 2. Withdraw every announced prefix over the live sessions.
 	denounceCtx, cancelDenounce := context.WithTimeout(context.Background(), timeout)

@@ -283,9 +283,10 @@ For now anycastd provides the following metrics:
 
 Service could provide their metrics in order to aggregate current statuses.
 
-| Metric name         | Labels  | Type  | Description                             |
-| ------------------- | ------- | ----- | --------------------------------------- |
-| anycastd_service_up | service | gauge | Service liveness status based on checks |
+| Metric name                | Labels  | Type  | Description                              |
+| -------------------------- | ------- | ----- | ---------------------------------------- |
+| anycastd_service_up        | service | gauge | Service liveness status based on checks  |
+| anycastd_service_announced | service | gauge | Actual BGP announce state (`1`/`0`)      |
 
 ### Checks
 

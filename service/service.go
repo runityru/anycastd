@@ -133,5 +133,10 @@ func (s *service) run(ctx context.Context) error {
 		}
 	}
 
+	// Record the actual announced state (not the desired one) every tick, so the
+	// gauge reflects what is really on the wire and stays 0 while an announce
+	// side effect keeps failing.
+	s.metrics.ServiceAnnounced(s.name, s.announced.Load())
+
 	return nil
 }

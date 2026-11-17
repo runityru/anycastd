@@ -53,7 +53,7 @@ func buildServices(
 			return nil, nil, errors.Wrapf(err, "error getting strategy for service %q", svcCfg.Name)
 		}
 
-		// Hysteresis thresholds default to 1/1 (immediate) when unset (0).
+		// AttemptTracker thresholds default to 1/1 (immediate) when unset (0).
 		announceThreshold := svcCfg.AnnounceThreshold
 		if announceThreshold == 0 {
 			announceThreshold = 1
@@ -70,7 +70,7 @@ func buildServices(
 			svcCfg.CheckInterval.TimeDuration(),
 			metrics,
 			strategy,
-			service.WithHysteresis(announceThreshold, denounceThreshold),
+			service.WithAttemptTracker(announceThreshold, denounceThreshold),
 		)
 
 		services = append(services, svc)

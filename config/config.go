@@ -221,26 +221,11 @@ type Service struct {
 	DenounceThreshold int             `json:"denounce_threshold"`
 }
 
-// hysteresisOrder enforces announce_threshold <= denounce_threshold. A zero
-// value means "unset" and is treated as the default 1 (applied at build time).
-// The rule is attached to AnnounceThreshold purely to run once per Service; it
-// compares both fields.
-func hysteresisOrder(s Service) validation.Rule {
-	return validation.By(func(_ any) error {
-		n, m := s.AnnounceThreshold, s.DenounceThreshold
-		if n == 0 {
-			n = 1
-		}
-		if m == 0 {
-			m = 1
-		}
-		if n > m {
-			return errors.New("must be <= denounce_threshold")
-		}
-		return nil
-	})
-}
-
+// AttemptTracker thresholds: a zero value means "unset" and is treated as the
+// default 1 (applied at build time in cmd/anycastd). Any positive values are
+// accepted, including announce_threshold > denounce_threshold, which yields a
+// fast-withdraw (fail-closed) configuration where a service is withdrawn
+// quicker than it is announced.
 func (s Service) Validate() error {
 	return validation.ValidateStruct(&s,
 		validation.Field(&s.Name, validation.Required),
@@ -248,7 +233,6 @@ func (s Service) Validate() error {
 		validation.Field(&s.Checks, validation.Required),
 		validation.Field(&s.AnnounceThreshold, validation.When(s.AnnounceThreshold != 0, validation.Min(1))),
 		validation.Field(&s.DenounceThreshold, validation.When(s.DenounceThreshold != 0, validation.Min(1))),
-		validation.Field(&s.AnnounceThreshold, hysteresisOrder(s)),
 	)
 }
 

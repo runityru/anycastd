@@ -22,13 +22,13 @@ type Checker struct {
 }
 
 type service struct {
-	name       string
-	announcer  announcer.Announcer
-	checks     []Checker
-	interval   time.Duration
-	metrics    Metrics
-	strategy   Strategy
-	hysteresis Hysteresis
+	name           string
+	announcer      announcer.Announcer
+	checks         []Checker
+	interval       time.Duration
+	metrics        Metrics
+	strategy       Strategy
+	attemptTracker AttemptTracker
 
 	announced *atomic.Bool
 }
@@ -37,14 +37,14 @@ type service struct {
 // defaults, so a later option wins.
 type Option func(*service)
 
-// WithHysteresis returns an Option that gates Announce/Denounce transitions on
+// WithAttemptTracker returns an Option that gates Announce/Denounce transitions on
 // N consecutive successes and M consecutive failures. N must be <= M; a zero
 // N/M is not valid here — callers are expected to pass the validated,
 // defaulted values from configuration. Without this option New applies the
 // default 1/1 (announce/denounce immediately, legacy behaviour).
-func WithHysteresis(n, m int) Option {
+func WithAttemptTracker(n, m int) Option {
 	return func(s *service) {
-		s.hysteresis = NewHysteresis(n, m)
+		s.attemptTracker = NewAttemptTracker(n, m)
 	}
 }
 
@@ -58,14 +58,14 @@ func New(
 	opts ...Option,
 ) Service {
 	s := &service{
-		name:       name,
-		announcer:  a,
-		checks:     checks,
-		interval:   interval,
-		metrics:    metrics,
-		strategy:   strategy,
-		hysteresis: NewHysteresis(1, 1),
-		announced:  &atomic.Bool{},
+		name:           name,
+		announcer:      a,
+		checks:         checks,
+		interval:       interval,
+		metrics:        metrics,
+		strategy:       strategy,
+		attemptTracker: NewAttemptTracker(1, 1),
+		announced:      &atomic.Bool{},
 	}
 
 	for _, opt := range opts {
@@ -110,10 +110,10 @@ func (s *service) run(ctx context.Context) error {
 		s.metrics.ServiceUp(s.name)
 	}
 
-	// Hysteresis decides whether to announce/denounce this tick. The
+	// AttemptTracker decides whether to announce/denounce this tick. The
 	// announced flag guards the side effect so it fires exactly once per
 	// transition; the decide call itself stays idempotent per tick.
-	switch s.hysteresis.decide(serviceDown) {
+	switch s.attemptTracker.decide(serviceDown) {
 	case transitionAnnounce:
 		if !s.announced.Load() {
 			if err := s.announcer.Announce(ctx); err != nil {

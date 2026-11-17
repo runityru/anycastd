@@ -482,13 +482,13 @@ func TestBuildServicesReturnsWithdrawableAnnouncers(t *testing.T) {
 	r.True(deleted["2001:db8::/32"])
 }
 
-// TestBuildServicesHysteresisThresholdsApplied verifies that the per-service
+// TestBuildServicesAttemptTrackerThresholdsApplied verifies that the per-service
 // denounce_threshold config flows through buildServices into the running
-// service's hysteresis gate. A service with a huge denounce threshold stays
+// service's anti-flap gate. A service with a huge denounce threshold stays
 // announced for many consecutive failing ticks (no flapping); if the threshold
 // were dropped (default 1/1), the first failing tick would withdraw it and the
 // test would fail.
-func TestBuildServicesHysteresisThresholdsApplied(t *testing.T) {
+func TestBuildServicesAttemptTrackerThresholdsApplied(t *testing.T) {
 	r := require.New(t)
 
 	driver := announcer.NewDriverMock()
@@ -522,7 +522,11 @@ func TestBuildServicesHysteresisThresholdsApplied(t *testing.T) {
 		},
 	}
 
-	services, _, err := buildServices(svcs, []string{"10.0.0.0/24"}, driver, stubMetrics{}, newChecker)
+	// Use spyMetrics (not stubMetrics): stubMetrics never invokes the checker,
+	// so the service would always be healthy and the denounce-threshold window
+	// would never be exercised. spyMetrics actually runs fn, letting the test
+	// verify that a failing tick does not withdraw while below the threshold.
+	services, _, err := buildServices(svcs, []string{"10.0.0.0/24"}, driver, &spyMetrics{}, newChecker)
 	r.NoError(err)
 	r.Len(services, 1)
 

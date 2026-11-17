@@ -10,6 +10,104 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestAttemptTrackerDecide exercises the transition logic of the AttemptTracker
+// value object. Each case replays a sequence of raw per-tick results (true =
+// service down) and asserts the exact transition decide returns on every tick.
+// The table is deliberately non-tautological: it pins down the threshold
+// boundary, streak reset on sign flip, and the fact that a crossed threshold
+// keeps yielding a transition (which underpins announce/denounce retry after a
+// failed side effect).
+func TestAttemptTrackerDecide(t *testing.T) {
+	tests := []struct {
+		name     string
+		n, m     int
+		sequence []bool
+		expected []transition
+	}{
+		{
+			name: "threshold 1/1 cold start announces immediately",
+			n:    1, m: 1,
+			sequence: []bool{false},
+			expected: []transition{transitionAnnounce},
+		},
+		{
+			name: "cold start down with m=1 decides denounce",
+			n:    1, m: 1,
+			sequence: []bool{true},
+			expected: []transition{transitionDenounce},
+		},
+		{
+			name: "cold start healthy announces immediately even with large N",
+			n:    3, m: 3,
+			sequence: []bool{false},
+			expected: []transition{transitionAnnounce},
+		},
+		{
+			name: "announce requires N consecutive ups after a failure",
+			n:    3, m: 3,
+			sequence: []bool{true, false, false, false},
+			expected: []transition{transitionNone, transitionNone, transitionNone, transitionAnnounce},
+		},
+		{
+			name: "holds state below announce threshold",
+			n:    3, m: 3,
+			sequence: []bool{true, false, false},
+			expected: []transition{transitionNone, transitionNone, transitionNone},
+		},
+		{
+			name: "denounce requires M consecutive downs",
+			n:    1, m: 3,
+			sequence: []bool{true, true, true},
+			expected: []transition{transitionNone, transitionNone, transitionDenounce},
+		},
+		{
+			name: "fail streak resets on an up tick",
+			n:    1, m: 3,
+			sequence: []bool{true, false, true, true, true},
+			expected: []transition{transitionNone, transitionAnnounce, transitionNone, transitionNone, transitionDenounce},
+		},
+		{
+			name: "success streak resets on a down tick",
+			n:    3, m: 1,
+			sequence: []bool{false, true, false, false},
+			expected: []transition{transitionAnnounce, transitionDenounce, transitionNone, transitionNone},
+		},
+		{
+			// N > M (announce_threshold > denounce_threshold) is now a legal
+			// fail-closed configuration. The decide logic must stay correct for
+			// it: denounce fires after fewer consecutive downs than announce
+			// needs ups, so a failing service is withdrawn faster than it is
+			// re-announced (fast withdrawal).
+			name: "announce faster than denounce (N>M)",
+			n:    3, m: 2,
+			sequence: []bool{true, true, false, false, false},
+			expected: []transition{transitionNone, transitionDenounce, transitionNone, transitionNone, transitionAnnounce},
+		},
+		{
+			name: "crossed announce threshold keeps yielding announce (enables retry)",
+			n:    2, m: 2,
+			sequence: []bool{false, false, false, false},
+			expected: []transition{transitionAnnounce, transitionAnnounce, transitionAnnounce, transitionAnnounce},
+		},
+		{
+			name: "crossed denounce threshold keeps yielding denounce (enables retry)",
+			n:    1, m: 2,
+			sequence: []bool{false, true, true, true},
+			expected: []transition{transitionAnnounce, transitionNone, transitionDenounce, transitionDenounce},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, len(tc.sequence), len(tc.expected), "malformed test case")
+			tr := NewAttemptTracker(tc.n, tc.m)
+			for i, down := range tc.sequence {
+				require.Equalf(t, tc.expected[i], tr.decide(down), "tick %d (down=%v)", i, down)
+			}
+		})
+	}
+}
+
 // toggleChecker is a hand-written checkers.Checker whose result can be flipped
 // at runtime so a single behavioural test can drive a service up then down.
 type toggleChecker struct {
@@ -66,7 +164,7 @@ func (c *countingAnnouncer) counts() (announces, denounces int) {
 
 // countingMetrics records how many times ServiceUp/ServiceDown were observed,
 // letting tests assert that metrics are updated on every tick regardless of
-// whether a hysteresis transition fired.
+// whether an anti-flap transition fired.
 type countingMetrics struct {
 	mu      sync.Mutex
 	upCount int
@@ -95,12 +193,12 @@ func (m *countingMetrics) counts() (up, down int) {
 	return m.upCount, m.downCnt
 }
 
-// TestHysteresisServiceAnnouncesOnceAtThreshold drives a service with N=3, M=2
+// TestAttemptTrackerAnnouncesOnceAtThreshold drives a service with N=3, M=2
 // through a down-then-up sequence. It asserts that Announce fires exactly once
 // when the 3rd consecutive up tick crosses the threshold — not on every tick —
 // and that ServiceUp metrics are recorded on every up tick, even below the
 // threshold.
-func TestHysteresisServiceAnnouncesOnceAtThreshold(t *testing.T) {
+func TestAttemptTrackerAnnouncesOnceAtThreshold(t *testing.T) {
 	r := require.New(t)
 
 	tc := &toggleChecker{kind: "icmp_ping"}
@@ -116,7 +214,7 @@ func TestHysteresisServiceAnnouncesOnceAtThreshold(t *testing.T) {
 		time.Second,
 		metrics,
 		AtLeastOne(),
-		WithHysteresis(3, 2),
+		WithAttemptTracker(3, 2),
 	).(*service)
 
 	ctx := context.Background()
@@ -158,11 +256,11 @@ func TestHysteresisServiceAnnouncesOnceAtThreshold(t *testing.T) {
 	r.Equal(4, up)
 }
 
-// TestHysteresisServiceDenouncesOnceAtThreshold drives a service with N=3, M=2
+// TestAttemptTrackerDenouncesOnceAtThreshold drives a service with N=3, M=2
 // to the announced state, then flips it down. Consecutive failures inside the
 // M window do not flap (no denounce); the M-th failure denounces exactly once;
 // further failures do not re-denounce.
-func TestHysteresisServiceDenouncesOnceAtThreshold(t *testing.T) {
+func TestAttemptTrackerDenouncesOnceAtThreshold(t *testing.T) {
 	r := require.New(t)
 
 	tc := &toggleChecker{kind: "icmp_ping"}
@@ -178,7 +276,7 @@ func TestHysteresisServiceDenouncesOnceAtThreshold(t *testing.T) {
 		time.Second,
 		metrics,
 		AtLeastOne(),
-		WithHysteresis(3, 2),
+		WithAttemptTracker(3, 2),
 	).(*service)
 
 	ctx := context.Background()
@@ -221,10 +319,10 @@ func TestHysteresisServiceDenouncesOnceAtThreshold(t *testing.T) {
 	r.Equal(5, down, "ServiceDown keeps updating every down tick")
 }
 
-// TestHysteresisServiceColdStartHealthyAnnouncesImmediately verifies the cold
+// TestAttemptTrackerColdStartHealthyAnnouncesImmediately verifies the cold
 // start rule: a service that is healthy on its very first tick announces at
 // once, even with a non-trivial announce threshold.
-func TestHysteresisServiceColdStartHealthyAnnouncesImmediately(t *testing.T) {
+func TestAttemptTrackerColdStartHealthyAnnouncesImmediately(t *testing.T) {
 	r := require.New(t)
 
 	tc := &toggleChecker{kind: "icmp_ping"} // healthy by default
@@ -239,7 +337,7 @@ func TestHysteresisServiceColdStartHealthyAnnouncesImmediately(t *testing.T) {
 		time.Second,
 		metrics,
 		AtLeastOne(),
-		WithHysteresis(5, 5),
+		WithAttemptTracker(5, 5),
 	).(*service)
 
 	r.NoError(svc.run(context.Background()))
@@ -249,10 +347,10 @@ func TestHysteresisServiceColdStartHealthyAnnouncesImmediately(t *testing.T) {
 	r.Equal(1, up)
 }
 
-// TestHysteresisServiceDefaultIsPassThrough verifies that New without the
-// WithHysteresis option keeps the legacy 1/1 behaviour: every healthy tick
+// TestAttemptTrackerDefaultIsPassThrough verifies that New without the
+// WithAttemptTracker option keeps the legacy 1/1 behaviour: every healthy tick
 // announces and every down tick denounces immediately.
-func TestHysteresisServiceDefaultIsPassThrough(t *testing.T) {
+func TestAttemptTrackerDefaultIsPassThrough(t *testing.T) {
 	r := require.New(t)
 
 	tc := &toggleChecker{kind: "icmp_ping"}

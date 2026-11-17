@@ -293,7 +293,7 @@ func uint16ptr(v uint16) *uint16 { return &v }
 
 func uint32ptr(v uint32) *uint32 { return &v }
 
-func TestServiceHysteresisValidation(t *testing.T) {
+func TestServiceAttemptTrackerValidation(t *testing.T) {
 	r := require.New(t)
 
 	base := func() Service {
@@ -319,16 +319,11 @@ func TestServiceHysteresisValidation(t *testing.T) {
 		s.DenounceThreshold = 5
 		r.NoError(s.Validate())
 	})
-	t.Run("announce above denounce fails closed", func(t *testing.T) {
+	t.Run("announce above denounce valid (fast withdraw, 5/2)", func(t *testing.T) {
 		s := base()
 		s.AnnounceThreshold = 5
 		s.DenounceThreshold = 2
-		r.Error(s.Validate())
-	})
-	t.Run("unset denounce with announce>1 fails closed (default 1)", func(t *testing.T) {
-		s := base()
-		s.AnnounceThreshold = 3 // denounce unset -> default 1 -> 3 > 1
-		r.Error(s.Validate())
+		r.NoError(s.Validate())
 	})
 	t.Run("unset announce with denounce>1 is valid (default 1)", func(t *testing.T) {
 		s := base()

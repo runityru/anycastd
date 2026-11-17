@@ -28,15 +28,16 @@ func buildServices(
 	driver announcer.BGPServer,
 	metrics service.Metrics,
 	newChecker newCheckerFactory,
-) ([]service.Service, error) {
+) ([]service.Service, []announcer.Announcer, error) {
 	services := make([]service.Service, 0, len(svcs))
+	announcers := make([]announcer.Announcer, 0, len(svcs))
 
 	for _, svcCfg := range svcs {
 		checks := make([]service.Checker, 0, len(svcCfg.Checks))
 		for _, check := range svcCfg.Checks {
 			c, err := newChecker(check.Kind, check.Spec)
 			if err != nil {
-				return nil, errors.Wrapf(err, "error creating checker %q for service %q", check.Kind, svcCfg.Name)
+				return nil, nil, errors.Wrapf(err, "error creating checker %q for service %q", check.Kind, svcCfg.Name)
 			}
 			checks = append(checks, service.Checker{Check: c, Group: check.Group})
 		}
@@ -45,10 +46,11 @@ func buildServices(
 			GoBGP:    driver,
 			Prefixes: routes,
 		})
+		announcers = append(announcers, a)
 
 		strategy, err := service.GetStrategy(svcCfg.Strategy, svcCfg.StrategyOptions)
 		if err != nil {
-			return nil, errors.Wrapf(err, "error getting strategy for service %q", svcCfg.Name)
+			return nil, nil, errors.Wrapf(err, "error getting strategy for service %q", svcCfg.Name)
 		}
 
 		svc := service.New(
@@ -63,5 +65,5 @@ func buildServices(
 		services = append(services, svc)
 	}
 
-	return services, nil
+	return services, announcers, nil
 }

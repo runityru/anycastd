@@ -119,7 +119,7 @@ func TestBuildServices(t *testing.T) {
 		},
 	}
 
-	services, err := buildServices(svcs, []string{"10.0.0.0/24", "2001:db8::/32"}, driver, stubMetrics{}, newChecker)
+	services, _, err := buildServices(svcs, []string{"10.0.0.0/24", "2001:db8::/32"}, driver, stubMetrics{}, newChecker)
 	r.NoError(err)
 	r.Len(services, 2)
 
@@ -163,7 +163,7 @@ func TestBuildServicesRunsAnnouncerWithPrefixes(t *testing.T) {
 		},
 	}
 
-	services, err := buildServices(svcs, []string{"10.0.0.0/24", "2001:db8::/32"}, driver, stubMetrics{}, newChecker)
+	services, _, err := buildServices(svcs, []string{"10.0.0.0/24", "2001:db8::/32"}, driver, stubMetrics{}, newChecker)
 	r.NoError(err)
 	r.Len(services, 1)
 
@@ -203,7 +203,7 @@ func TestBuildServicesInvalidCheckerKind(t *testing.T) {
 		},
 	}
 
-	_, err := buildServices(svcs, nil, announcer.NewDriverMock(), stubMetrics{}, checkers.NewCheckerByKind)
+	_, _, err := buildServices(svcs, nil, announcer.NewDriverMock(), stubMetrics{}, checkers.NewCheckerByKind)
 	r.Error(err)
 	r.Contains(err.Error(), "does_not_exist")
 	r.Contains(err.Error(), "svc-a")
@@ -225,7 +225,7 @@ func TestBuildServicesInvalidStrategy(t *testing.T) {
 		},
 	}
 
-	_, err := buildServices(svcs, nil, announcer.NewDriverMock(), stubMetrics{}, newChecker)
+	_, _, err := buildServices(svcs, nil, announcer.NewDriverMock(), stubMetrics{}, newChecker)
 	r.Error(err)
 	r.Contains(err.Error(), "no_such_strategy")
 	r.Contains(err.Error(), "svc-a")
@@ -236,7 +236,7 @@ func TestBuildServicesInvalidStrategy(t *testing.T) {
 func TestBuildServicesEmptyServicesList(t *testing.T) {
 	r := require.New(t)
 
-	services, err := buildServices(nil, nil, announcer.NewDriverMock(), stubMetrics{}, func(_ string, _ json.RawMessage) (checkers.Checker, error) {
+	services, _, err := buildServices(nil, nil, announcer.NewDriverMock(), stubMetrics{}, func(_ string, _ json.RawMessage) (checkers.Checker, error) {
 		return &checkers.Mock{}, nil
 	})
 
@@ -280,7 +280,7 @@ func TestBuildServicesPropagatesCheckGroups(t *testing.T) {
 		},
 	}
 
-	services, err := buildServices(svcs, []string{"10.0.0.0/24"}, driver, sm, newChecker)
+	services, _, err := buildServices(svcs, []string{"10.0.0.0/24"}, driver, sm, newChecker)
 	r.NoError(err)
 	r.Len(services, 1)
 
@@ -339,7 +339,7 @@ func TestBuildServicesStrategyAllRequiresEveryCheckUp(t *testing.T) {
 		},
 	}
 
-	services, err := buildServices(svcs, []string{"10.0.0.0/24"}, driver, stubMetrics{}, newChecker)
+	services, _, err := buildServices(svcs, []string{"10.0.0.0/24"}, driver, stubMetrics{}, newChecker)
 	r.NoError(err)
 	r.Len(services, 1)
 
@@ -397,7 +397,7 @@ func TestBuildServicesStrategyAllDenouncesOnDown(t *testing.T) {
 		},
 	}
 
-	services, err := buildServices(svcs, []string{"10.0.0.0/24"}, driver, &spyMetrics{}, newChecker)
+	services, _, err := buildServices(svcs, []string{"10.0.0.0/24"}, driver, &spyMetrics{}, newChecker)
 	r.NoError(err)
 	r.Len(services, 1)
 
@@ -425,4 +425,59 @@ func TestBuildServicesStrategyAllDenouncesOnDown(t *testing.T) {
 
 	cancel()
 	<-done
+}
+
+// TestBuildServicesReturnsWithdrawableAnnouncers asserts that buildServices
+// returns one announcer per service, and that each announcer withdraws every
+// configured prefix via DeletePath when Denounced. This underpins graceful
+// shutdown, which withdraws prefixes before closing BGP sessions.
+func TestBuildServicesReturnsWithdrawableAnnouncers(t *testing.T) {
+	r := require.New(t)
+
+	driver := announcer.NewDriverMock()
+
+	var mu sync.Mutex
+	deleted := map[string]bool{}
+	driver.On("DeletePath", mock.Anything, mock.Anything).
+		Run(func(args mock.Arguments) {
+			mu.Lock()
+			defer mu.Unlock()
+			deleted[args.Get(1).(string)] = true
+		}).Return(nil)
+
+	newChecker := func(_ string, _ json.RawMessage) (checkers.Checker, error) {
+		return &checkers.Mock{}, nil
+	}
+
+	svcs := []config.Service{
+		{
+			Name:          "svc-a",
+			CheckInterval: th.Duration(10 * time.Millisecond),
+			Strategy:      "at_least_one",
+			Checks:        []config.Check{{Kind: "icmp_ping"}},
+		},
+		{
+			Name:          "svc-b",
+			CheckInterval: th.Duration(10 * time.Millisecond),
+			Strategy:      "at_least_one",
+			Checks:        []config.Check{{Kind: "http_2xx"}},
+		},
+	}
+	routes := []string{"10.0.0.0/24", "2001:db8::/32"}
+
+	_, announcers, err := buildServices(svcs, routes, driver, stubMetrics{}, newChecker)
+	r.NoError(err)
+	r.Len(announcers, 2)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	for _, a := range announcers {
+		r.NoError(a.Denounce(ctx))
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	r.Len(deleted, 2)
+	r.True(deleted["10.0.0.0/24"])
+	r.True(deleted["2001:db8::/32"])
 }

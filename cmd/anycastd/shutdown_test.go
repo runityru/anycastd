@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
@@ -144,4 +147,110 @@ func TestShutdownClosesMetricsServer(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("metrics server did not shut down")
 	}
+}
+
+// shutdownLogHook captures logrus warning messages emitted during shutdown so
+// tests can assert the expected branch (timeout vs. failing loop) was actually
+// taken, rather than only that shutdown happened to reach Denounce/Stop.
+type shutdownLogHook struct {
+	mu     sync.Mutex
+	levels []log.Level
+	msgs   []string
+}
+
+func (h *shutdownLogHook) Levels() []log.Level {
+	return []log.Level{log.WarnLevel}
+}
+
+func (h *shutdownLogHook) Fire(e *log.Entry) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.levels = append(h.levels, e.Level)
+	h.msgs = append(h.msgs, e.Message)
+	return nil
+}
+
+func (h *shutdownLogHook) messages() []string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	out := make([]string, len(h.msgs))
+	copy(out, h.msgs)
+	return out
+}
+
+// attachShutdownLogHook installs a capture hook on the standard logrus logger
+// and registers cleanup that removes it. logrus exposes no RemoveHook, so the
+// hook is removed by filtering it out of the standard logger's Warn-level hook
+// slice, leaving any pre-existing hooks intact.
+func attachShutdownLogHook(t *testing.T) *shutdownLogHook {
+	t.Helper()
+	hook := &shutdownLogHook{}
+	log.AddHook(hook)
+	t.Cleanup(func() {
+		std := log.StandardLogger()
+		hooks := std.Hooks[log.WarnLevel]
+		for i, h := range hooks {
+			if h == hook {
+				std.Hooks[log.WarnLevel] = append(hooks[:i], hooks[i+1:]...)
+				break
+			}
+		}
+	})
+	return hook
+}
+
+// TestShutdownFailContinue asserts that a health/metrics loop returning a
+// non-nil error is logged and shutdown still proceeds to withdraw prefixes and
+// stop BGP — the failure is not fatal.
+func TestShutdownFailContinue(t *testing.T) {
+	r := require.New(t)
+
+	hook := attachShutdownLogHook(t)
+
+	logs := &callLog{}
+	driver := &shutdownDriver{log: logs}
+	ann := &shutdownAnnouncer{log: logs}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		<-gctx.Done() // blocked until shutdown cancels the run context
+		return errors.New("check loop crashed")
+	})
+
+	shutdown(driver, []announcer.Announcer{ann}, nil, cancel, g, time.Second)
+
+	// The failing loop must not stop the withdrawal sequence.
+	r.Equal([]string{"denounce", "stop"}, logs.list())
+	r.Contains(strings.Join(hook.messages(), "\n"), "exited with error during shutdown")
+}
+
+// TestShutdownTimeout asserts that a loop which never returns after
+// cancellation causes waitForGroup to hit errGroupTimeout (a tiny timeout), and
+// that shutdown still reaches Denounce and Stop without hanging. The wedged
+// loop is released only after the test completes, so no goroutine is leaked.
+func TestShutdownTimeout(t *testing.T) {
+	r := require.New(t)
+
+	hook := attachShutdownLogHook(t)
+
+	logs := &callLog{}
+	driver := &shutdownDriver{log: logs}
+	ann := &shutdownAnnouncer{log: logs}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	release := make(chan struct{})
+	defer close(release) // unblock the wedged loop after shutdown returns
+
+	g, _ := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		<-ctx.Done() // cancelled by cancelRun, but the loop "wedges" past the timeout
+		<-release    // do not return until the test is done
+		return nil
+	})
+
+	shutdown(driver, []announcer.Announcer{ann}, nil, cancel, g, 50*time.Millisecond)
+
+	r.Equal([]string{"denounce", "stop"}, logs.list())
+	r.Contains(strings.Join(hook.messages(), "\n"), "did not exit within")
 }

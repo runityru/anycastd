@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"io"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -177,4 +179,68 @@ func TestMetricsRepositoryListPeersError(t *testing.T) {
 	r.NotPanics(func() { m.collect(t.Context()) })
 
 	d.AssertExpectations(t)
+}
+
+// countingPeerStateSource wraps a fakePeerStateSource and counts ListPeers
+// invocations, so the Run test can assert that collect() fires on each tick
+// without fixed sleeps.
+type countingPeerStateSource struct {
+	fakePeerStateSource
+	mu    sync.Mutex
+	calls int
+}
+
+func (c *countingPeerStateSource) ListPeers(ctx context.Context) ([]PeerState, error) {
+	c.mu.Lock()
+	c.calls++
+	c.mu.Unlock()
+	return c.fakePeerStateSource.ListPeers(ctx)
+}
+
+func (c *countingPeerStateSource) callCount() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.calls
+}
+
+// TestMetricsRepositoryRunTicks asserts that Run calls collect() on each tick.
+// A tiny injected interval (10ms) makes the test fast and deterministic via
+// require.Eventually (no fixed sleeps).
+func TestMetricsRepositoryRunTicks(t *testing.T) {
+	r := require.New(t)
+
+	src := &countingPeerStateSource{fakePeerStateSource: fakePeerStateSource{
+		states: []PeerState{peer("10.0.0.1", true)},
+	}}
+	m := newTestMetrics(t, src)
+	m.interval = 10 * time.Millisecond
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() { done <- m.Run(ctx) }()
+
+	// collect() must fire repeatedly: ListPeers is called at least 3 times.
+	r.Eventually(func() bool { return src.callCount() >= 3 }, 2*time.Second, 10*time.Millisecond)
+
+	cancel()
+	r.NoError(<-done)
+}
+
+// TestMetricsRepositoryRunStopsOnCancel asserts that Run returns nil and exits
+// promptly once the context is cancelled.
+func TestMetricsRepositoryRunStopsOnCancel(t *testing.T) {
+	r := require.New(t)
+
+	m := newTestMetrics(t, &fakePeerStateSource{states: []PeerState{peer("10.0.0.1", true)}})
+	m.interval = 10 * time.Millisecond
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	start := time.Now()
+	err := m.Run(ctx)
+	r.NoError(err)
+	r.Less(time.Since(start), time.Second, "Run should return promptly on a cancelled context")
 }

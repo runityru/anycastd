@@ -48,6 +48,10 @@ type metrics struct {
 	routerID string
 	reg      prometheus.Registerer
 	logger   *log.Logger
+
+	// interval is how often collect() refreshes the gauges. It defaults to
+	// 1s in NewMetricsRepository and is injectable for tests.
+	interval time.Duration
 }
 
 func NewMetricsRepository(src PeerStateSource, routerID string, reg prometheus.Registerer, logger *log.Logger) Metrics {
@@ -294,6 +298,7 @@ func NewMetricsRepository(src PeerStateSource, routerID string, reg prometheus.R
 		routerID: routerID,
 		reg:      reg,
 		logger:   logger,
+		interval: 1 * time.Second,
 	}
 	return m
 }
@@ -450,7 +455,7 @@ func (m *metrics) collect(ctx context.Context) {
 // (no panic on SIGTERM/SIGINT), and a transient ListPeers error never aborts
 // the loop (collect logs and carries on).
 func (m *metrics) Run(ctx context.Context) error {
-	ticker := time.NewTicker(1 * time.Second)
+	ticker := time.NewTicker(m.interval)
 	defer ticker.Stop()
 
 	for {

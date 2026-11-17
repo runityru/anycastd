@@ -179,3 +179,143 @@ func (s *serviceTestSuite) TearDownTest() {
 func TestServiceTestSuite(t *testing.T) {
 	suite.Run(t, &serviceTestSuite{})
 }
+
+// errStrategySentinel is a sentinel returned by injected strategies to verify
+// that Run wraps strategy errors and that no side effects fire on strategy
+// failure.
+var errStrategySentinel = errors.New("strategy sentinel error")
+
+// TestRunContextCancelledPreCancel verifies Run returns nil immediately when the
+// context is already cancelled (ctx.Done selected before any run tick).
+func (s *serviceTestSuite) TestRunContextCancelledPreCancel() {
+	ctx, cancel := context.WithCancel(s.T().Context())
+	cancel()
+
+	strategy, _ := GetStrategyNoOptions("")
+	svc := New("test_service", s.announcerM, []Checker{{s.checkM, ""}}, 1*time.Second, s.metricsM, strategy)
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- svc.Run(ctx)
+	}()
+
+	select {
+	case err := <-errCh:
+		s.Require().NoError(err)
+	case <-time.After(5 * time.Second):
+		s.Fail("Run did not return for an already-cancelled context")
+	}
+}
+
+// TestRunContextCancelledFromGoroutine verifies Run returns nil when the context
+// is cancelled from another goroutine while Run is blocked in its select loop.
+func (s *serviceTestSuite) TestRunContextCancelledFromGoroutine() {
+	ctx, cancel := context.WithCancel(s.T().Context())
+
+	strategy, _ := GetStrategyNoOptions("")
+	svc := New("test_service", s.announcerM, []Checker{{s.checkM, ""}}, time.Hour, s.metricsM, strategy)
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- svc.Run(ctx)
+	}()
+
+	cancel()
+
+	select {
+	case err := <-errCh:
+		s.Require().NoError(err)
+	case <-time.After(5 * time.Second):
+		s.Fail("Run did not return after context cancellation")
+	}
+}
+
+// TestRunExecutesSuccessfulTickThenExitsOnCancel verifies that Run runs at
+// least one successful tick (announcing and recording the announced metric)
+// and keeps looping, then returns nil once the context is cancelled. This
+// guards the core loop against a mutation that returns after the first
+// successful tick instead of continuing.
+func (s *serviceTestSuite) TestRunExecutesSuccessfulTickThenExitsOnCancel() {
+	s.announcerM.On("Announce").Return(nil).Once()
+
+	// The loop ticks repeatedly (every 1ms) until the context is cancelled, so
+	// the per-tick calls may happen any number of times; the Announce side
+	// effect fires exactly once when the healthy tick first crosses the
+	// threshold.
+	s.checkM.On("Kind").Return("test_check").Maybe()
+	s.checkM.On("Check").Return(nil).Maybe()
+	s.metricsM.On("ServiceUp", "test_service").Return().Maybe()
+	s.metricsM.On("ServiceAnnounced", "test_service", true).Return().Maybe()
+	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Maybe()
+
+	strategy, _ := GetStrategyNoOptions("")
+	svc := New("test_service", s.announcerM, []Checker{{s.checkM, ""}}, time.Millisecond, s.metricsM, strategy).(*service)
+
+	ctx, cancel := context.WithCancel(s.T().Context())
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- svc.Run(ctx)
+	}()
+
+	// Wait until the successful tick has announced and recorded the gauge.
+	s.Require().Eventually(func() bool {
+		return svc.announced.Load()
+	}, 2*time.Second, 10*time.Millisecond)
+
+	cancel()
+
+	select {
+	case err := <-errCh:
+		s.Require().NoError(err)
+	case <-time.After(5 * time.Second):
+		s.Fail("Run did not return after context cancellation")
+	}
+
+	s.Require().True(svc.announced.Load(), "service should remain announced after the successful tick")
+}
+
+// TestRunStrategyError verifies that a strategy error surfaced through run is
+// wrapped by Run with a "service error" prefix, preserving the sentinel via the
+// error chain (errors.Cause / errors.Is). The context is NOT cancelled here, so
+// the returned error can only originate from the strategy.
+func (s *serviceTestSuite) TestRunStrategyError() {
+	strategy := func([]CheckResult) (bool, error) {
+		return false, errStrategySentinel
+	}
+
+	s.checkM.On("Kind").Return("test_check").Once()
+	s.checkM.On("Check").Return(nil).Once()
+	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Once()
+
+	svc := New("test_service", s.announcerM, []Checker{{s.checkM, ""}}, time.Nanosecond, s.metricsM, strategy)
+
+	err := svc.Run(s.ctx)
+	s.Require().Error(err)
+	s.Require().Contains(err.Error(), "service error")
+	s.Require().True(errors.Is(err, errStrategySentinel), "wrapped error must preserve the sentinel via Is")
+	s.Require().Equal(errStrategySentinel, errors.Cause(err), "errors.Cause must unwrap to the sentinel")
+}
+
+// TestRunStrategyErrorNoSideEffects verifies that when the strategy returns an
+// error, run aborts before any side effect: no ServiceUp/ServiceDown/Announced
+// metrics and no Announce/Denounce announcer calls.
+func (s *serviceTestSuite) TestRunStrategyErrorNoSideEffects() {
+	strategy := func([]CheckResult) (bool, error) {
+		return false, errStrategySentinel
+	}
+
+	s.checkM.On("Kind").Return("test_check").Once()
+	s.checkM.On("Check").Return(nil).Once()
+	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Once()
+
+	svc := New("test_service", s.announcerM, []Checker{{s.checkM, ""}}, 1*time.Second, s.metricsM, strategy).(*service)
+
+	err := svc.run(s.ctx)
+	s.Require().Error(err)
+
+	s.announcerM.AssertNotCalled(s.T(), "Announce")
+	s.announcerM.AssertNotCalled(s.T(), "Denounce")
+	s.metricsM.AssertNotCalled(s.T(), "ServiceUp")
+	s.metricsM.AssertNotCalled(s.T(), "ServiceDown")
+	s.metricsM.AssertNotCalled(s.T(), "ServiceAnnounced")
+}

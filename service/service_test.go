@@ -188,7 +188,7 @@ var errStrategySentinel = errors.New("strategy sentinel error")
 // TestRunContextCancelledPreCancel verifies Run returns nil immediately when the
 // context is already cancelled (ctx.Done selected before any run tick).
 func (s *serviceTestSuite) TestRunContextCancelledPreCancel() {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(s.T().Context())
 	cancel()
 
 	strategy, _ := GetStrategyNoOptions("")
@@ -210,7 +210,7 @@ func (s *serviceTestSuite) TestRunContextCancelledPreCancel() {
 // TestRunContextCancelledFromGoroutine verifies Run returns nil when the context
 // is cancelled from another goroutine while Run is blocked in its select loop.
 func (s *serviceTestSuite) TestRunContextCancelledFromGoroutine() {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(s.T().Context())
 
 	strategy, _ := GetStrategyNoOptions("")
 	svc := New("test_service", s.announcerM, []Checker{{s.checkM, ""}}, time.Hour, s.metricsM, strategy)
@@ -251,7 +251,7 @@ func (s *serviceTestSuite) TestRunExecutesSuccessfulTickThenExitsOnCancel() {
 	strategy, _ := GetStrategyNoOptions("")
 	svc := New("test_service", s.announcerM, []Checker{{s.checkM, ""}}, time.Millisecond, s.metricsM, strategy).(*service)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(s.T().Context())
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- svc.Run(ctx)

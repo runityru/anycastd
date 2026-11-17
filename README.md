@@ -194,11 +194,11 @@ anycastd can run on **GoBGP v3** (`engine: gobgpv3`) or **GoBGP v4**
 (`engine: gobgpv4`). Operators should be aware of the following security
 considerations:
 
-- **GoBGP v4** (pinned `v4.11.0`) is **not** affected by
+* **GoBGP v4** (pinned `v4.11.0`) is **not** affected by
   [CVE-2026-30405](https://github.com/osrg/gobgp/security/advisories/GHSA-4p9m-8gc4-rw2h)
   / [GO-2026-4736](https://vuln.go.dev/). The fix landed in v4.4.0
   (commits `f12b8fb`, `583080a`) and is present in the pinned version.
-- **GoBGP v3** (pinned `v3.37.0`) **is affected** by CVE-2026-30405 and has
+* **GoBGP v3** (pinned `v3.37.0`) **is affected** by CVE-2026-30405 and has
   **no fixed version** — the fix was **not** backported to the v3 line. The
   vulnerability is a remote, unauthenticated denial of service: a
   malformed BGP `UPDATE` carrying a `NEXT_HOP` attribute shorter than 4 bytes
@@ -209,13 +209,13 @@ considerations:
 
 **Recommendations:**
 
-- Prefer `engine: gobgpv4`. It is not only free of this CVE but also the only
+* Prefer `engine: gobgpv4`. It is not only free of this CVE but also the only
   engine that supports BFD (see above). Migrate any `gobgpv3` deployments to
   `gobgpv4`.
-- If `gobgpv3` must be used, narrow the attack surface: restrict BGP peering
+* If `gobgpv3` must be used, narrow the attack surface: restrict BGP peering
   (TCP 179) to trusted peer addresses only (host ACL/firewall, network
   policies) and run the daemon under a supervisor that restarts it on crash.
-- Note: `govulncheck` may report `Fixed in: N/A` for **both** engines. This is
+* Note: `govulncheck` may report `Fixed in: N/A` for **both** engines. This is
   an artifact of the Go vulnerability database entry `GO-2026-4736` (affected
   range declared with no `fixed` event) and does **not** mean the v4 fix is
   missing — the v4.11.0 source contains both patches.

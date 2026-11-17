@@ -38,10 +38,11 @@ type service struct {
 type Option func(*service)
 
 // WithAttemptTracker returns an Option that gates Announce/Denounce transitions on
-// N consecutive successes and M consecutive failures. N must be <= M; a zero
-// N/M is not valid here — callers are expected to pass the validated,
-// defaulted values from configuration. Without this option New applies the
-// default 1/1 (announce/denounce immediately, legacy behaviour).
+// N consecutive successes and M consecutive failures. N and M are independent
+// positive values (validated by config.Service.Validate); a zero N/M behaves
+// like 1/1 (immediate). Callers are expected to pass the validated, defaulted
+// values from configuration. Without this option New applies the default 1/1
+// (announce/denounce immediately, legacy behaviour).
 func WithAttemptTracker(n, m int) Option {
 	return func(s *service) {
 		s.attemptTracker = NewAttemptTracker(n, m)

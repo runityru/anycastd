@@ -20,7 +20,11 @@ type metrics struct {
 	checkDurationSeconds *prometheus.GaugeVec
 }
 
-func NewMetrics(appVersion string) (Metrics, error) {
+func NewMetrics(reg prometheus.Registerer, appVersion string) (Metrics, error) {
+	if reg == nil {
+		reg = prometheus.DefaultRegisterer
+	}
+
 	appUpGauge := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "anycastd",
@@ -49,7 +53,7 @@ func NewMetrics(appVersion string) (Metrics, error) {
 	)
 
 	for _, m := range []prometheus.Collector{appUpGauge, upGauge, checkDurationSeconds} {
-		if err := prometheus.Register(m); err != nil {
+		if err := reg.Register(m); err != nil {
 			return nil, err
 		}
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"os/signal"
@@ -88,7 +89,14 @@ func main() {
 
 	log.Infof("Initializing anycastd (%s @ %s) ...", appVersion, buildTimestamp)
 
-	g, _ := errgroup.WithContext(ctx)
+	// runCtx drives the cancellable goroutines (service checks and the GoBGP
+	// metrics poller). It is derived from the signal ctx and cancelled
+	// explicitly in shutdown() so those loops stop before any prefix is
+	// withdrawn.
+	runCtx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
+
+	g, gctx := errgroup.WithContext(runCtx)
 
 	log.Trace("Initializing BGP server ...")
 	dspec := driverSpec(cfg.Announcer)
@@ -103,20 +111,21 @@ func main() {
 		panic(err)
 	}
 
-	g.Go(func() error {
-		log.Trace("Starting to serve GoBGP API")
-		return driver.Serve()
-	})
+	// Serve runs on its own goroutine. Both GoBGP engines' Serve() loops block
+	// until the server is stopped, and the gobgpv3 engine's loop never returns,
+	// so Serve is intentionally excluded from the cancellable errgroup `g`
+	// above: that group must finish during shutdown, which a never-returning
+	// Serve would prevent. Serve is terminated by driver.Stop() in shutdown().
+	go func() {
+		if err := driver.Serve(); err != nil {
+			log.Errorf("BGP server Serve exited with error: %s", err)
+		}
+	}()
 
 	log.Trace("Starting BGP sessions ...")
 	if err := driver.Start(ctx, dspec); err != nil {
 		panic(err)
 	}
-	defer func() {
-		if err := driver.Stop(ctx); err != nil {
-			log.Warnf("error stopping BGP session: %s", err)
-		}
-	}()
 
 	metrics, err := service.NewMetrics(appVersion)
 	if err != nil {
@@ -125,7 +134,7 @@ func main() {
 
 	log.Info("Starting service initialization ...")
 
-	services, err := buildServices(
+	services, announcers, err := buildServices(
 		cfg.Services,
 		cfg.Announcer.Routes,
 		driver,
@@ -138,19 +147,31 @@ func main() {
 
 	for _, svc := range services {
 		g.Go(func() error {
-			return svc.Run(ctx)
+			return svc.Run(gctx)
 		})
 	}
 
+	var httpSrv *http.Server
 	if cfg.Metrics.Enabled {
 		log.Debug("metrics server is enabled, initializing ...")
 
-		g.Go(func() error {
-			http.Handle("/metrics", promhttp.Handler())
-			// nosec G114: the metrics endpoint intentionally has no
-			// read/write timeouts (documented limitation, SPEC.md §8).
-			return http.ListenAndServe(cfg.Metrics.Address, nil) // #nosec G114
-		})
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", promhttp.Handler())
+		// nosec G114: the metrics endpoint intentionally has no
+		// read/write timeouts (documented limitation, SPEC.md §8).
+		httpSrv = &http.Server{
+			Addr:    cfg.Metrics.Address,
+			Handler: mux,
+		}
+
+		// The metrics HTTP listener is kept out of `g` and shut down explicitly
+		// in shutdown(); ListenAndServe only returns on Shutdown, so waiting on
+		// it via the errgroup would deadlock the withdrawal sequence.
+		go func() {
+			if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Errorf("metrics server error: %s", err)
+			}
+		}()
 
 		amr := announcer.NewMetricsRepository(driver, cfg.Announcer.RouterID, prometheus.DefaultRegisterer, log.StandardLogger())
 		if err := amr.Register(); err != nil {
@@ -158,13 +179,26 @@ func main() {
 		}
 
 		g.Go(func() error {
-			return amr.Run(ctx)
+			return amr.Run(gctx)
 		})
 	}
 
 	log.Infof("Initialization completed")
 
-	if err := g.Wait(); err != nil {
-		panic(err)
-	}
+	// Block until a termination signal, or until a cancellable goroutine fails
+	// (which is treated as a shutdown trigger). We never block shutdown on
+	// g.Wait() directly: Serve and, until closed, the metrics listener do not
+	// return, so the previous `defer driver.Stop(ctx)` pattern never ran and
+	// left peers holding the anycast route until the hold timer expired.
+	go func() {
+		if err := g.Wait(); err != nil {
+			log.Errorf("fatal error: %s", err)
+			stop()
+		}
+	}()
+
+	<-ctx.Done()
+	log.Info("Shutting down ...")
+
+	shutdown(driver, announcers, httpSrv, cancelRun, g, shutdownTimeout)
 }

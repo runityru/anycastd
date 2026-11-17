@@ -212,11 +212,33 @@ func (p Peer) isIPv6() bool {
 }
 
 type Service struct {
-	Name            string          `json:"name"`
-	CheckInterval   th.Duration     `json:"check_interval"`
-	Strategy        string          `json:"strategy"`
-	StrategyOptions json.RawMessage `json:"strategy_options"`
-	Checks          []Check         `json:"checks"`
+	Name              string          `json:"name"`
+	CheckInterval     th.Duration     `json:"check_interval"`
+	Strategy          string          `json:"strategy"`
+	StrategyOptions   json.RawMessage `json:"strategy_options"`
+	Checks            []Check         `json:"checks"`
+	AnnounceThreshold int             `json:"announce_threshold"`
+	DenounceThreshold int             `json:"denounce_threshold"`
+}
+
+// hysteresisOrder enforces announce_threshold <= denounce_threshold. A zero
+// value means "unset" and is treated as the default 1 (applied at build time).
+// The rule is attached to AnnounceThreshold purely to run once per Service; it
+// compares both fields.
+func hysteresisOrder(s Service) validation.Rule {
+	return validation.By(func(_ any) error {
+		n, m := s.AnnounceThreshold, s.DenounceThreshold
+		if n == 0 {
+			n = 1
+		}
+		if m == 0 {
+			m = 1
+		}
+		if n > m {
+			return errors.New("must be <= denounce_threshold")
+		}
+		return nil
+	})
 }
 
 func (s Service) Validate() error {
@@ -224,6 +246,9 @@ func (s Service) Validate() error {
 		validation.Field(&s.Name, validation.Required),
 		validation.Field(&s.CheckInterval, validation.Required),
 		validation.Field(&s.Checks, validation.Required),
+		validation.Field(&s.AnnounceThreshold, validation.When(s.AnnounceThreshold != 0, validation.Min(1))),
+		validation.Field(&s.DenounceThreshold, validation.When(s.DenounceThreshold != 0, validation.Min(1))),
+		validation.Field(&s.AnnounceThreshold, hysteresisOrder(s)),
 	)
 }
 

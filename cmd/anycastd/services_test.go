@@ -481,3 +481,75 @@ func TestBuildServicesReturnsWithdrawableAnnouncers(t *testing.T) {
 	r.True(deleted["10.0.0.0/24"])
 	r.True(deleted["2001:db8::/32"])
 }
+
+// TestBuildServicesHysteresisThresholdsApplied verifies that the per-service
+// denounce_threshold config flows through buildServices into the running
+// service's hysteresis gate. A service with a huge denounce threshold stays
+// announced for many consecutive failing ticks (no flapping); if the threshold
+// were dropped (default 1/1), the first failing tick would withdraw it and the
+// test would fail.
+func TestBuildServicesHysteresisThresholdsApplied(t *testing.T) {
+	r := require.New(t)
+
+	driver := announcer.NewDriverMock()
+
+	var mu sync.Mutex
+	announced := false
+	driver.On("AddPath", mock.Anything, mock.Anything).
+		Run(func(args mock.Arguments) {
+			mu.Lock()
+			defer mu.Unlock()
+			announced = true
+		}).Return(nil)
+	driver.On("DeletePath", mock.Anything, mock.Anything).
+		Run(func(args mock.Arguments) {
+			mu.Lock()
+			defer mu.Unlock()
+			announced = false
+		}).Return(nil)
+
+	tc := &toggleChecker{kind: "icmp_ping"}
+	newChecker := func(_ string, _ json.RawMessage) (checkers.Checker, error) { return tc, nil }
+
+	svcs := []config.Service{
+		{
+			Name:              "svc-a",
+			CheckInterval:     th.Duration(5 * time.Millisecond),
+			Strategy:          "at_least_one",
+			Checks:            []config.Check{{Kind: "icmp_ping"}},
+			AnnounceThreshold: 1,
+			DenounceThreshold: 100000, // effectively never denounce in this window
+		},
+	}
+
+	services, _, err := buildServices(svcs, []string{"10.0.0.0/24"}, driver, stubMetrics{}, newChecker)
+	r.NoError(err)
+	r.Len(services, 1)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = services[0].Run(ctx)
+	}()
+
+	// Healthy service announces immediately (announce_threshold = 1).
+	r.Eventually(func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return announced
+	}, time.Second, 5*time.Millisecond)
+
+	// Flip to failing. With a huge denounce threshold the service must stay
+	// announced across many consecutive failing ticks instead of flapping.
+	tc.setFail(true)
+	time.Sleep(60 * time.Millisecond) // several ticks
+
+	mu.Lock()
+	still := announced
+	mu.Unlock()
+	r.True(still, "denounce_threshold must prevent withdrawal within the window")
+
+	cancel()
+	<-done
+}

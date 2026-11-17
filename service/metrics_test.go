@@ -160,3 +160,136 @@ anycastd_up{version="1.2.3"} 1
 `
 	require.NoError(t, testutil.GatherAndCompare(reg, strings.NewReader(expected), "anycastd_up"))
 }
+
+// TestMetricsServiceAnnounced drives the real gauge directly: announced=true
+// sets 1.0, announced=false sets 0.0.
+func TestMetricsServiceAnnounced(t *testing.T) {
+	m, _ := newTestMetrics(t, "test")
+
+	m.ServiceAnnounced("x", true)
+	require.Equal(t, 1.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("x")))
+
+	m.ServiceAnnounced("x", false)
+	require.Equal(t, 0.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("x")))
+
+	// Re-announce to prove the gauge is overwritten, not sticky.
+	m.ServiceAnnounced("x", true)
+	require.Equal(t, 1.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("x")))
+}
+
+// TestMetricsServiceAnnouncedToggle drives the real metrics through run() and
+// asserts that service_announced{service} mirrors the actual BGP announce
+// state: 1 after a successful announce, 0 after a successful denounce.
+func TestMetricsServiceAnnouncedToggle(t *testing.T) {
+	r := require.New(t)
+
+	m, _ := newTestMetrics(t, "test")
+	tc := &toggleChecker{kind: "icmp_ping"}
+	a := &countingAnnouncer{}
+
+	strategy, err := GetStrategyNoOptions("")
+	r.NoError(err)
+
+	svc := New("svc", a, []Checker{{tc, ""}}, 10*time.Millisecond, m, strategy).(*service)
+
+	// Healthy -> announce -> announced = 1.
+	r.NoError(svc.run(t.Context()))
+	r.Equal(1.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("svc")))
+
+	// Flip to failing -> denounce -> announced = 0.
+	tc.setFail(true)
+	r.NoError(svc.run(t.Context()))
+	r.Equal(0.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("svc")))
+
+	// Back to healthy -> announce -> announced = 1.
+	tc.setFail(false)
+	r.NoError(svc.run(t.Context()))
+	r.Equal(1.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("svc")))
+}
+
+// failFirstAnnouncer is an announcer.Announcer fake that fails its first
+// Announce, letting a test drive the announce-retry path.
+type failFirstAnnouncer struct {
+	announces int
+}
+
+func (f *failFirstAnnouncer) Announce(context.Context) error {
+	f.announces++
+	if f.announces == 1 {
+		return errors.New("announce error")
+	}
+	return nil
+}
+
+func (f *failFirstAnnouncer) Denounce(context.Context) error { return nil }
+
+// TestMetricsServiceAnnouncedReflectsAnnounceRetry asserts that a failed
+// Announce leaves the announced gauge at 0 (the service is not actually
+// announced), and that a retried successful Announce flips it to 1.
+func TestMetricsServiceAnnouncedReflectsAnnounceRetry(t *testing.T) {
+	r := require.New(t)
+
+	m, _ := newTestMetrics(t, "test")
+	tc := &toggleChecker{kind: "icmp_ping"}
+	a := &failFirstAnnouncer{}
+
+	strategy, err := GetStrategyNoOptions("")
+	r.NoError(err)
+
+	svc := New("svc", a, []Checker{{tc, ""}}, 10*time.Millisecond, m, strategy).(*service)
+
+	// Run 1: healthy, but Announce fails -> announced stays false -> gauge 0.
+	r.NoError(svc.run(t.Context()))
+	r.Equal(0.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("svc")))
+
+	// Run 2: healthy, Announce retried and succeeds -> announced true -> gauge 1.
+	r.NoError(svc.run(t.Context()))
+	r.Equal(1.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("svc")))
+}
+
+// TestMetricsServiceAnnouncedWithAttemptTrackerWindow asserts that within an
+// anti-flap window (below the announce/denounce threshold) the announced gauge
+// keeps its previous value, only changing when a transition actually fires.
+func TestMetricsServiceAnnouncedWithAttemptTrackerWindow(t *testing.T) {
+	r := require.New(t)
+
+	m, _ := newTestMetrics(t, "test")
+	tc := &toggleChecker{kind: "icmp_ping"}
+	tc.setFail(true) // start down to reset the cold-start success streak
+	a := &countingAnnouncer{}
+
+	strategy, err := GetStrategyNoOptions("")
+	r.NoError(err)
+
+	svc := New("svc", a, []Checker{{tc, ""}}, 10*time.Millisecond, m, strategy, WithAttemptTracker(3, 2)).(*service)
+
+	// Two failing ticks below the M=2 denounce threshold: never announced -> 0.
+	r.NoError(svc.run(t.Context()))
+	r.Equal(0.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("svc")))
+	r.NoError(svc.run(t.Context()))
+	r.Equal(0.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("svc")))
+
+	// Healthy. First two up ticks stay below N=3 (no announce) -> gauge stays 0.
+	tc.setFail(false)
+	r.NoError(svc.run(t.Context()))
+	r.Equal(0.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("svc")))
+	r.NoError(svc.run(t.Context()))
+	r.Equal(0.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("svc")))
+
+	// Third up tick crosses N=3 -> announce -> gauge flips to 1.
+	r.NoError(svc.run(t.Context()))
+	r.Equal(1.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("svc")))
+}
+
+// TestMetricsCollectsServiceAnnouncedFamily kills a mutation that drops the
+// registration of the service_announced collector. With no series set yet, the
+// family must still be exported (headers present, no data lines).
+func TestMetricsCollectsServiceAnnouncedFamily(t *testing.T) {
+	_, reg := newTestMetrics(t, "1.2.3")
+
+	expected := `
+# HELP anycastd_service_announced Actual BGP announce state (1 if announced, 0 otherwise)
+# TYPE anycastd_service_announced gauge
+`
+	require.NoError(t, testutil.GatherAndCompare(reg, strings.NewReader(expected), "anycastd_service_announced"))
+}

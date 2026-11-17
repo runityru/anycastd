@@ -334,9 +334,13 @@ The `service.Service.Run` loop ticks every `check_interval` and runs one
 This is **stateful**: prefixes are only re-announced/withdrawn on a hysteresis
 transition, not on every tick. `anycastd_service_up` (step 3) records the raw
 health every tick and may therefore diverge from the actual announced state
-while a streak is below its threshold. The announce/denounce side effect fires
-at most once per transition; on a failed side effect the flag is not changed so
-the transition is retried on the next tick.
+while a streak is below its threshold. `anycastd_service_announced` (updated
+after step 5) records the **actual** BGP announce state from `announced` — `1`
+only once a prefix is really announced, `0` once it is really withdrawn — so it
+reflects what is on the wire (a failed announce/denounce side effect leaves it
+unchanged until the next successful retry). The announce/denounce side effect
+fires at most once per transition; on a failed side effect the flag is not
+changed so the transition is retried on the next tick.
 
 ### 4.3 Announce / denounce mechanics (announcer)
 
@@ -497,6 +501,7 @@ metrics endpoint.
 | --------------------------------- | ----- | ------------------ | ------------------------------------------------------ |
 | `anycastd_up`                     | gauge | `version`          | Application liveness status (always `1` while running) |
 | `anycastd_service_up`             | gauge | `service`          | Service liveness status based on checks (`1`/`0`)      |
+| `anycastd_service_announced`      | gauge | `service`          | Actual BGP announce state (`1` announced, `0` not)     |
 | `anycastd_check_duration_seconds` | gauge | `service`, `check` | Duration of the last check execution in seconds        |
 
 ### 7.2 GoBGP metrics (announcer)

@@ -24,6 +24,7 @@ func (s *serviceTestSuite) TestRunPass() {
 	s.checkM.On("Check").Return(nil).Once()
 
 	s.metricsM.On("ServiceUp", "test_service").Return().Once()
+	s.metricsM.On("ServiceAnnounced", "test_service", true).Return().Once()
 	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Once()
 
 	strategy, _ := GetStrategyNoOptions("")
@@ -39,6 +40,7 @@ func (s *serviceTestSuite) TestRunFail() {
 	s.checkM.On("Check").Return(errors.New("error")).Once()
 
 	s.metricsM.On("ServiceDown", "test_service").Return().Once()
+	s.metricsM.On("ServiceAnnounced", "test_service", false).Return().Once()
 	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Once()
 
 	strategy, _ := GetStrategyNoOptions("")
@@ -64,6 +66,8 @@ func (s *serviceTestSuite) TestRunPassThenFailThenPass() {
 	mCall4 := s.metricsM.On("ServiceDown", "test_service").Return().NotBefore(mCall3).Once()
 	mCall5 := s.metricsM.On("MeasureCall", "test_service", "test_check").Return().NotBefore(mCall4).Once()
 	s.metricsM.On("ServiceUp", "test_service").Return().NotBefore(mCall5).Once()
+	s.metricsM.On("ServiceAnnounced", "test_service", true).Return().Times(2)
+	s.metricsM.On("ServiceAnnounced", "test_service", false).Return().Once()
 
 	strategy, _ := GetStrategyNoOptions("")
 	svc := New("test_service", s.announcerM, []Checker{{s.checkM, ""}}, 1*time.Second, s.metricsM, strategy).(*service)
@@ -85,6 +89,8 @@ func (s *serviceTestSuite) TestRunAnnounceFailureRetried() {
 
 	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Times(2)
 	s.metricsM.On("ServiceUp", "test_service").Return().Times(2)
+	s.metricsM.On("ServiceAnnounced", "test_service", false).Return().Once()
+	s.metricsM.On("ServiceAnnounced", "test_service", true).Return().Once()
 
 	strategy, _ := GetStrategyNoOptions("")
 	svc := New("test_service", s.announcerM, []Checker{{s.checkM, ""}}, 1*time.Second, s.metricsM, strategy).(*service)
@@ -112,6 +118,8 @@ func (s *serviceTestSuite) TestRunDenounceFailureRetried() {
 	s.checkM.On("Check").Return(nil).Once()
 	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Once()
 	s.metricsM.On("ServiceUp", "test_service").Return().Once()
+	s.metricsM.On("ServiceAnnounced", "test_service", true).Return().Times(2)
+	s.metricsM.On("ServiceAnnounced", "test_service", false).Return().Once()
 
 	// Run 2: service down, denounce fails -> announced must stay true.
 	s.checkM.On("Kind").Return("test_check").Once()

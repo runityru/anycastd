@@ -183,6 +183,8 @@ func (m *countingMetrics) ServiceDown(string) {
 	m.downCnt++
 }
 
+func (m *countingMetrics) ServiceAnnounced(string, bool) {}
+
 func (m *countingMetrics) MeasureCall(_ context.Context, _, _ string, fn func(context.Context) error) error {
 	return fn(context.Background())
 }

@@ -22,8 +22,9 @@ import (
 // the metrics boundary.
 type stubMetrics struct{}
 
-func (stubMetrics) ServiceUp(string)   {}
-func (stubMetrics) ServiceDown(string) {}
+func (stubMetrics) ServiceUp(string)              {}
+func (stubMetrics) ServiceDown(string)            {}
+func (stubMetrics) ServiceAnnounced(string, bool) {}
 func (stubMetrics) MeasureCall(context.Context, string, string, func(context.Context) error) error {
 	return nil
 }
@@ -50,6 +51,8 @@ func (s *spyMetrics) ServiceDown(string) {
 	s.up = false
 	s.set = true
 }
+
+func (s *spyMetrics) ServiceAnnounced(string, bool) {}
 
 func (s *spyMetrics) MeasureCall(ctx context.Context, _, _ string, fn func(context.Context) error) error {
 	return fn(ctx)

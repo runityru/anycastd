@@ -10,6 +10,7 @@ import (
 type Metrics interface {
 	ServiceUp(service string)
 	ServiceDown(service string)
+	ServiceAnnounced(service string, announced bool)
 
 	MeasureCall(ctx context.Context, service, check string, fn func(ctx context.Context) error) error
 }
@@ -18,6 +19,7 @@ type metrics struct {
 	registerer           prometheus.Registerer
 	appUpGauge           *prometheus.GaugeVec
 	upGauge              *prometheus.GaugeVec
+	announcedGauge       *prometheus.GaugeVec
 	checkDurationSeconds *prometheus.GaugeVec
 }
 
@@ -62,6 +64,15 @@ func NewMetrics(appVersion string, opts ...MetricsOption) (Metrics, error) {
 		[]string{"service"},
 	)
 
+	announcedGauge := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: "anycastd",
+			Name:      "service_announced",
+			Help:      "Actual BGP announce state (1 if announced, 0 otherwise)",
+		},
+		[]string{"service"},
+	)
+
 	checkDurationSeconds := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: "anycastd",
@@ -71,7 +82,7 @@ func NewMetrics(appVersion string, opts ...MetricsOption) (Metrics, error) {
 		[]string{"service", "check"},
 	)
 
-	for _, mc := range []prometheus.Collector{appUpGauge, upGauge, checkDurationSeconds} {
+	for _, mc := range []prometheus.Collector{appUpGauge, upGauge, announcedGauge, checkDurationSeconds} {
 		if err := m.registerer.Register(mc); err != nil {
 			return nil, err
 		}
@@ -81,6 +92,7 @@ func NewMetrics(appVersion string, opts ...MetricsOption) (Metrics, error) {
 
 	m.appUpGauge = appUpGauge
 	m.upGauge = upGauge
+	m.announcedGauge = announcedGauge
 	m.checkDurationSeconds = checkDurationSeconds
 
 	return m, nil
@@ -92,6 +104,14 @@ func (m *metrics) ServiceUp(service string) {
 
 func (m *metrics) ServiceDown(service string) {
 	m.upGauge.WithLabelValues(service).Set(0.0)
+}
+
+func (m *metrics) ServiceAnnounced(service string, announced bool) {
+	if announced {
+		m.announcedGauge.WithLabelValues(service).Set(1.0)
+	} else {
+		m.announcedGauge.WithLabelValues(service).Set(0.0)
+	}
 }
 
 func (m *metrics) MeasureCall(ctx context.Context, service, check string, fn func(ctx context.Context) error) error {

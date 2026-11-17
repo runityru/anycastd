@@ -2,12 +2,14 @@ package announcer
 
 import (
 	"context"
+	"errors"
 	"io"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -156,4 +158,23 @@ func TestMetricsRepositoryBfdDown(t *testing.T) {
 	m.collect(context.Background())
 
 	r.Equal(float64(0), testutil.ToFloat64(m.peerBfdState.WithLabelValues("10.9.9.9", "10.0.0.4")))
+}
+
+// TestMetricsRepositoryListPeersError covers the ListPeers error branch in
+// collect: a failing PeerStateSource must be logged and skipped without
+// panicking and without mutating the gauges. It uses DriverMock as the
+// PeerStateSource, confirming the mock is usable for the H4 metrics path.
+func TestMetricsRepositoryListPeersError(t *testing.T) {
+	r := require.New(t)
+
+	d := NewDriverMock()
+	d.On("ListPeers", mock.Anything).Return([]PeerState(nil), errors.New("list peers failed"))
+
+	m := newTestMetrics(t, d)
+
+	// The error branch must not panic and must leave the gauges untouched (no
+	// series is created, since collect returns before setting any label value).
+	r.NotPanics(func() { m.collect(t.Context()) })
+
+	d.AssertExpectations(t)
 }

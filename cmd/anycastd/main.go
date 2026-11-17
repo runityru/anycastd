@@ -124,36 +124,19 @@ func main() {
 	}
 
 	log.Info("Starting service initialization ...")
-	for _, svcCfg := range cfg.Services {
-		log.Tracef("Initializing service %s ...", svcCfg.Name)
 
-		checks := []service.Checker{}
-		for _, check := range svcCfg.Checks {
-			log.WithFields(log.Fields{
-				"service": svcCfg.Name,
-				"check":   check.Kind,
-			}).Trace("registering check ...")
+	services, err := buildServices(
+		cfg.Services,
+		cfg.Announcer.Routes,
+		driver,
+		metrics,
+		checkers.NewCheckerByKind,
+	)
+	if err != nil {
+		panic(err)
+	}
 
-			c, err := checkers.NewCheckerByKind(check.Kind, check.Spec)
-			if err != nil {
-				panic(err)
-			}
-
-			checks = append(checks, service.Checker{Check: c, Group: check.Group})
-		}
-
-		a := announcer.New(announcer.Config{
-			GoBGP:    driver,
-			Prefixes: cfg.Announcer.Routes,
-		})
-
-		strategy, err := service.GetStrategy(svcCfg.Strategy, svcCfg.StrategyOptions)
-		if err != nil {
-			panic(err)
-		}
-
-		svc := service.New(svcCfg.Name, a, checks, svcCfg.CheckInterval.TimeDuration(), metrics, strategy)
-
+	for _, svc := range services {
 		g.Go(func() error {
 			return svc.Run(ctx)
 		})

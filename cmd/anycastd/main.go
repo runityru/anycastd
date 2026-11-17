@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/kelseyhightower/envconfig"
 	"github.com/prometheus/client_golang/prometheus"
@@ -157,11 +158,17 @@ func main() {
 
 		mux := http.NewServeMux()
 		mux.Handle("/metrics", promhttp.Handler())
-		// nosec G114: the metrics endpoint intentionally has no
-		// read/write timeouts (documented limitation, SPEC.md §8).
+		// The metrics endpoint sets explicit timeouts to mitigate slowloris
+		// (gosec G112) and bound resource use per request/connection.
+		// Prometheus scrapes are small and fast, so these are far above what
+		// a scrape needs (see SPEC.md §8).
 		httpSrv = &http.Server{
-			Addr:    cfg.Metrics.Address,
-			Handler: mux,
+			Addr:              cfg.Metrics.Address,
+			Handler:           mux,
+			ReadHeaderTimeout: 10 * time.Second,
+			ReadTimeout:       10 * time.Second,
+			WriteTimeout:      30 * time.Second,
+			IdleTimeout:       120 * time.Second,
 		}
 
 		// The metrics HTTP listener is kept out of `g` and shut down explicitly

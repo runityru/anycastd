@@ -134,6 +134,7 @@ func TestBuildServicesRunsAnnouncerWithPrefixes(t *testing.T) {
 	r := require.New(t)
 
 	driver := announcer.NewDriverMock()
+	driver.On("ListPeers", mock.Anything).Return([]announcer.PeerState{{SessionState: 6}}, nil)
 
 	// Record every announced prefix behind a mutex: the service goroutine
 	// appends to it, the test goroutine reads it. This avoids a data race on
@@ -309,6 +310,7 @@ func TestBuildServicesStrategyAllRequiresEveryCheckUp(t *testing.T) {
 	r := require.New(t)
 
 	driver := announcer.NewDriverMock()
+	driver.On("ListPeers", mock.Anything).Return([]announcer.PeerState{{SessionState: 6}}, nil)
 
 	var mu sync.Mutex
 	announced := map[string]bool{}
@@ -370,6 +372,7 @@ func TestBuildServicesStrategyAllDenouncesOnDown(t *testing.T) {
 	r := require.New(t)
 
 	driver := announcer.NewDriverMock()
+	driver.On("ListPeers", mock.Anything).Return([]announcer.PeerState{{SessionState: 6}}, nil)
 
 	var mu sync.Mutex
 	announced := map[string]bool{}
@@ -495,6 +498,7 @@ func TestBuildServicesAttemptTrackerThresholdsApplied(t *testing.T) {
 	r := require.New(t)
 
 	driver := announcer.NewDriverMock()
+	driver.On("ListPeers", mock.Anything).Return([]announcer.PeerState{{SessionState: 6}}, nil)
 
 	var mu sync.Mutex
 	announced := false
@@ -559,4 +563,82 @@ func TestBuildServicesAttemptTrackerThresholdsApplied(t *testing.T) {
 
 	cancel()
 	<-done
+}
+
+// announcedRecorder is a service.Metrics fake that records the last effective
+// announced value passed to ServiceAnnounced.
+type announcedRecorder struct {
+	mu        sync.Mutex
+	announced bool
+	set       bool
+}
+
+func (a *announcedRecorder) ServiceUp(string)   {}
+func (a *announcedRecorder) ServiceDown(string) {}
+func (a *announcedRecorder) ServiceAnnounced(_ string, v bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.announced = v
+	a.set = true
+}
+func (a *announcedRecorder) MeasureCall(_ context.Context, _, _ string, fn func(context.Context) error) error {
+	return fn(context.Background())
+}
+
+func (a *announcedRecorder) lastAnnounced() (bool, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.announced, a.set
+}
+
+// TestBuildServicesWiresPeerStateSource verifies buildServices passes the driver
+// (a PeerStateSource) into each service: a healthy service announces, but with a
+// driver reporting no ESTABLISHED peer the effective announced gauge must be 0.
+func TestBuildServicesWiresPeerStateSource(t *testing.T) {
+	r := require.New(t)
+
+	driver := announcer.NewDriverMock()
+	driver.On("AddPath", mock.Anything, mock.Anything).Return(nil)
+	// No peer is ESTABLISHED (SessionState 4 != 6).
+	driver.On("ListPeers", mock.Anything).Return([]announcer.PeerState{{SessionState: 4}}, nil)
+
+	rec := &announcedRecorder{}
+	newChecker := func(kind string, _ json.RawMessage) (checkers.Checker, error) {
+		c := &checkers.Mock{}
+		c.On("Kind").Return(kind)
+		c.On("Check").Return(nil)
+		return c, nil
+	}
+
+	svcs := []config.Service{
+		{
+			Name:          "svc-a",
+			CheckInterval: th.Duration(5 * time.Millisecond),
+			Strategy:      "at_least_one",
+			Checks:        []config.Check{{Kind: "icmp_ping"}},
+		},
+	}
+
+	services, _, err := buildServices(svcs, []string{"10.0.0.0/24"}, driver, rec, newChecker)
+	r.NoError(err)
+	r.Len(services, 1)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = services[0].Run(ctx)
+	}()
+
+	// Healthy service announces (AddPath fires) but, with no ESTABLISHED peer,
+	// the effective announced gauge must stay 0.
+	r.Eventually(func() bool {
+		v, set := rec.lastAnnounced()
+		return set && !v
+	}, time.Second, 10*time.Millisecond)
+
+	cancel()
+	<-done
+
+	driver.AssertExpectations(t)
 }

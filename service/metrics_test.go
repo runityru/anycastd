@@ -10,6 +10,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
+
+	"github.com/runityru/anycastd/announcer"
 )
 
 // newTestMetrics builds a real *metrics via NewMetrics on a fresh, hermetic
@@ -288,8 +290,118 @@ func TestMetricsCollectsServiceAnnouncedFamily(t *testing.T) {
 	_, reg := newTestMetrics(t, "1.2.3")
 
 	expected := `
-# HELP anycastd_service_announced Actual BGP announce state (1 if announced, 0 otherwise)
+# HELP anycastd_service_announced Effective BGP announce state (1 if locally announced AND at least one peer session is ESTABLISHED, 0 otherwise)
 # TYPE anycastd_service_announced gauge
 `
 	require.NoError(t, testutil.GatherAndCompare(reg, strings.NewReader(expected), "anycastd_service_announced"))
+}
+
+// failFirstDenouncer is an announcer.Announcer fake that succeeds at Announce and
+// fails its first Denounce, letting a test drive the denounce-retry path.
+type failFirstDenouncer struct {
+	denounces int
+}
+
+func (f *failFirstDenouncer) Announce(context.Context) error { return nil }
+
+func (f *failFirstDenouncer) Denounce(context.Context) error {
+	f.denounces++
+	if f.denounces == 1 {
+		return errors.New("denounce error")
+	}
+	return nil
+}
+
+// TestMetricsServiceAnnouncedReflectsDenounceRetry asserts that a failed Denounce
+// leaves the announced gauge at 1 (we still believe we're announced), and that a
+// retried successful Denounce flips it to 0.
+func TestMetricsServiceAnnouncedReflectsDenounceRetry(t *testing.T) {
+	r := require.New(t)
+
+	m, _ := newTestMetrics(t, "test")
+	tc := &toggleChecker{kind: "icmp_ping"}
+	a := &failFirstDenouncer{}
+
+	strategy, err := GetStrategyNoOptions("")
+	r.NoError(err)
+
+	svc := New("svc", a, []Checker{{tc, ""}}, 10*time.Millisecond, m, strategy).(*service)
+
+	// Run 1: healthy -> announce -> gauge 1.
+	r.NoError(svc.run(t.Context()))
+	r.Equal(1.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("svc")))
+
+	// Run 2: down, denounce fails -> announced stays true -> gauge stays 1.
+	tc.setFail(true)
+	r.NoError(svc.run(t.Context()))
+	r.Equal(1.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("svc")))
+
+	// Run 3: down, denounce retried and succeeds -> gauge 0.
+	r.NoError(svc.run(t.Context()))
+	r.Equal(0.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("svc")))
+}
+
+// TestMetricsServiceAnnouncedDenounceWindow asserts that within the anti-flap
+// denounce window (M consecutive failures) the gauge keeps its previous value,
+// only dropping to 0 once the M-th consecutive failure actually fires the
+// Denounce transition.
+func TestMetricsServiceAnnouncedDenounceWindow(t *testing.T) {
+	r := require.New(t)
+
+	m, _ := newTestMetrics(t, "test")
+	tc := &toggleChecker{kind: "icmp_ping"}
+	a := &countingAnnouncer{}
+
+	strategy, err := GetStrategyNoOptions("")
+	r.NoError(err)
+
+	svc := New("svc", a, []Checker{{tc, ""}}, 10*time.Millisecond, m, strategy, WithAttemptTracker(1, 3)).(*service)
+
+	// Healthy -> announce immediately (N=1) -> gauge 1.
+	r.NoError(svc.run(t.Context()))
+	r.Equal(1.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("svc")))
+
+	// Two failing ticks below M=3: no denounce yet -> gauge stays 1.
+	tc.setFail(true)
+	r.NoError(svc.run(t.Context()))
+	r.Equal(1.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("svc")))
+	r.NoError(svc.run(t.Context()))
+	r.Equal(1.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("svc")))
+
+	// Third failing tick crosses M=3 -> denounce -> gauge 0.
+	r.NoError(svc.run(t.Context()))
+	r.Equal(0.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("svc")))
+}
+
+// TestMetricsServiceAnnouncedReflectsPeerState drives the real gauge through
+// run() with a peer-state source and asserts service_announced reflects the
+// effective state: 1 when announced AND at least one peer is ESTABLISHED, 0 when
+// announced but no peer is established.
+func TestMetricsServiceAnnouncedReflectsPeerState(t *testing.T) {
+	r := require.New(t)
+
+	m, _ := newTestMetrics(t, "test")
+	tc := &toggleChecker{kind: "icmp_ping"}
+	a := &countingAnnouncer{}
+	src := &fakePeerStateSource{states: []announcer.PeerState{{SessionState: announcer.PeerSessionEstablished}}}
+
+	strategy, err := GetStrategyNoOptions("")
+	r.NoError(err)
+
+	svc := New("svc", a, []Checker{{tc, ""}}, 10*time.Millisecond, m, strategy,
+		WithPeerStateSource(src)).(*service)
+
+	// Healthy + established peer -> gauge 1.
+	r.NoError(svc.run(t.Context()))
+	r.Equal(1.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("svc")))
+
+	// Peer session drops -> effective announced = 0 even though locally announced.
+	src.setStates([]announcer.PeerState{{SessionState: 4}})
+	r.NoError(svc.run(t.Context()))
+	r.Equal(0.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("svc")))
+
+	// Peer back up -> effective announced = 1 again (no re-announce side effect).
+	src.setStates([]announcer.PeerState{{SessionState: announcer.PeerSessionEstablished}})
+	r.NoError(svc.run(t.Context()))
+	r.Equal(1.0, testutil.ToFloat64(m.announcedGauge.WithLabelValues("svc")))
 }

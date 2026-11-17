@@ -25,7 +25,7 @@ type newCheckerFactory func(kind string, spec json.RawMessage) (checkers.Checker
 func buildServices(
 	svcs []config.Service,
 	routes []string,
-	driver announcer.BGPServer,
+	driver announcer.Driver,
 	metrics service.Metrics,
 	newChecker newCheckerFactory,
 ) ([]service.Service, []announcer.Announcer, error) {
@@ -71,6 +71,7 @@ func buildServices(
 			metrics,
 			strategy,
 			service.WithAttemptTracker(announceThreshold, denounceThreshold),
+			service.WithPeerStateSource(driver),
 		)
 
 		services = append(services, svc)

@@ -335,12 +335,16 @@ This is **stateful**: prefixes are only re-announced/withdrawn on a hysteresis
 transition, not on every tick. `anycastd_service_up` (step 3) records the raw
 health every tick and may therefore diverge from the actual announced state
 while a streak is below its threshold. `anycastd_service_announced` (updated
-after step 5) records the **actual** BGP announce state from `announced` — `1`
-only once a prefix is really announced, `0` once it is really withdrawn — so it
-reflects what is on the wire (a failed announce/denounce side effect leaves it
-unchanged until the next successful retry). The announce/denounce side effect
-fires at most once per transition; on a failed side effect the flag is not
-changed so the transition is retried on the next tick.
+after step 5) records the **effective** BGP announce state: `1` only when the
+prefix is locally confirmed announced (`announced` set) **and** at least one BGP
+peer session is ESTABLISHED, `0` otherwise. When a peer-state source is wired
+(the real driver), the gauge therefore drops to `0` if every peer session is
+down even while the service is locally announced; with no source it equals the
+locally-confirmed state. A failed `ListPeers` is logged and treated as
+established (no flapping). A failed announce/denounce side effect leaves the
+value unchanged until the next successful retry. The announce/denounce side
+effect fires at most once per transition; on a failed side effect the internal
+`announced` flag is not changed so the transition is retried on the next tick.
 
 ### 4.3 Announce / denounce mechanics (announcer)
 
@@ -501,7 +505,7 @@ metrics endpoint.
 | --------------------------------- | ----- | ------------------ | ------------------------------------------------------ |
 | `anycastd_up`                     | gauge | `version`          | Application liveness status (always `1` while running) |
 | `anycastd_service_up`             | gauge | `service`          | Service liveness status based on checks (`1`/`0`)      |
-| `anycastd_service_announced`      | gauge | `service`          | Actual BGP announce state (`1` announced, `0` not)     |
+| `anycastd_service_announced`      | gauge | `service`          | Effective announce state (`1` iff locally announced AND ≥1 peer ESTABLISHED, else `0`) |
 | `anycastd_check_duration_seconds` | gauge | `service`, `check` | Duration of the last check execution in seconds        |
 
 ### 7.2 GoBGP metrics (announcer)

@@ -446,3 +446,53 @@ func (s *serviceTestSuite) TestRunPeerDriftTracksPeerDrop() {
 	s.Require().NoError(err)
 	s.Require().True(svc.announced.Load(), "internal announced flag must stay true after peer drop")
 }
+
+// TestRunPeerDriftAnyEstablishedAmongMultiple verifies P3: with multiple peers,
+// the effective gauge is true if ANY one session is ESTABLISHED, regardless of
+// slice position. This pins the "any established" loop rather than a
+// first-element-only read.
+func (s *serviceTestSuite) TestRunPeerDriftAnyEstablishedAmongMultiple() {
+	s.announcerM.On("Announce").Return(nil).Once()
+
+	s.checkM.On("Kind").Return("test_check").Once()
+	s.checkM.On("Check").Return(nil).Once()
+
+	s.metricsM.On("ServiceUp", "test_service").Return().Once()
+	s.metricsM.On("ServiceAnnounced", "test_service", true).Return().Once()
+	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Once()
+
+	strategy, _ := GetStrategyNoOptions("")
+	src := &fakePeerStateSource{states: []announcer.PeerState{
+		{SessionState: 4}, // not ESTABLISHED
+		{SessionState: announcer.PeerSessionEstablished}, // ESTABLISHED later in the slice
+	}}
+
+	svc := New("test_service", s.announcerM, []Checker{{s.checkM, ""}}, 1*time.Second, s.metricsM, strategy,
+		WithPeerStateSource(src)).(*service)
+
+	err := svc.run(s.ctx)
+	s.Require().NoError(err)
+}
+
+// TestRunPeerDriftEmptyPeerList verifies P3: a configured peer-state source that
+// returns an empty peer list (no established session — e.g. before peers are
+// added) reports effective announced false.
+func (s *serviceTestSuite) TestRunPeerDriftEmptyPeerList() {
+	s.announcerM.On("Announce").Return(nil).Once()
+
+	s.checkM.On("Kind").Return("test_check").Once()
+	s.checkM.On("Check").Return(nil).Once()
+
+	s.metricsM.On("ServiceUp", "test_service").Return().Once()
+	s.metricsM.On("ServiceAnnounced", "test_service", false).Return().Once()
+	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Once()
+
+	strategy, _ := GetStrategyNoOptions("")
+	src := &fakePeerStateSource{states: []announcer.PeerState{}}
+
+	svc := New("test_service", s.announcerM, []Checker{{s.checkM, ""}}, 1*time.Second, s.metricsM, strategy,
+		WithPeerStateSource(src)).(*service)
+
+	err := svc.run(s.ctx)
+	s.Require().NoError(err)
+}

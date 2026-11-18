@@ -259,6 +259,7 @@ func TestBuildServicesPropagatesCheckGroups(t *testing.T) {
 	r := require.New(t)
 
 	driver := announcer.NewDriverMock()
+	driver.On("ListPeers", mock.Anything).Return([]announcer.PeerState{{SessionState: 6}}, nil)
 	sm := &spyMetrics{}
 
 	newChecker := func(kind string, _ json.RawMessage) (checkers.Checker, error) {

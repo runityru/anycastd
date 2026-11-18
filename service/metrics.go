@@ -68,7 +68,7 @@ func NewMetrics(appVersion string, opts ...MetricsOption) (Metrics, error) {
 		prometheus.GaugeOpts{
 			Namespace: "anycastd",
 			Name:      "service_announced",
-			Help:      "Actual BGP announce state (1 if announced, 0 otherwise)",
+			Help:      "Effective BGP announce state (1 if locally announced AND at least one peer session is ESTABLISHED, 0 otherwise)",
 		},
 		[]string{"service"},
 	)

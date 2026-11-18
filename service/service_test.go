@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -318,4 +319,180 @@ func (s *serviceTestSuite) TestRunStrategyErrorNoSideEffects() {
 	s.metricsM.AssertNotCalled(s.T(), "ServiceUp")
 	s.metricsM.AssertNotCalled(s.T(), "ServiceDown")
 	s.metricsM.AssertNotCalled(s.T(), "ServiceAnnounced")
+}
+
+// fakePeerStateSource is a hand-written announcer.PeerStateSource fake whose
+// returned peer states and error can be set by the test at runtime.
+type fakePeerStateSource struct {
+	mu     sync.Mutex
+	states []announcer.PeerState
+	err    error
+}
+
+func (f *fakePeerStateSource) ListPeers(context.Context) ([]announcer.PeerState, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.states, f.err
+}
+
+func (f *fakePeerStateSource) setStates(states []announcer.PeerState) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.states = states
+}
+
+// TestRunPeerDriftWithEstablishedPeer verifies P3: with a peer-state source
+// reporting an ESTABLISHED peer, a healthy service's effective announced gauge
+// is true (announce side effect + established peer).
+func (s *serviceTestSuite) TestRunPeerDriftWithEstablishedPeer() {
+	s.announcerM.On("Announce").Return(nil).Once()
+
+	s.checkM.On("Kind").Return("test_check").Once()
+	s.checkM.On("Check").Return(nil).Once()
+
+	s.metricsM.On("ServiceUp", "test_service").Return().Once()
+	s.metricsM.On("ServiceAnnounced", "test_service", true).Return().Once()
+	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Once()
+
+	strategy, _ := GetStrategyNoOptions("")
+	src := &fakePeerStateSource{states: []announcer.PeerState{{SessionState: announcer.PeerSessionEstablished}}}
+
+	svc := New("test_service", s.announcerM, []Checker{{s.checkM, ""}}, 1*time.Second, s.metricsM, strategy,
+		WithPeerStateSource(src)).(*service)
+
+	err := svc.run(s.ctx)
+	s.Require().NoError(err)
+	s.Require().True(svc.announced.Load(), "announced must be true after successful announce")
+}
+
+// TestRunPeerDriftWithNoEstablishedPeer verifies P3: when the service is locally
+// announced but no BGP peer session is ESTABLISHED, the reported ServiceAnnounced
+// is false while the internal announced flag stays true (so a later successful
+// announce is NOT repeated — side-effect gating is unchanged).
+func (s *serviceTestSuite) TestRunPeerDriftWithNoEstablishedPeer() {
+	s.announcerM.On("Announce").Return(nil).Once()
+
+	s.checkM.On("Kind").Return("test_check").Once()
+	s.checkM.On("Check").Return(nil).Once()
+
+	s.metricsM.On("ServiceUp", "test_service").Return().Once()
+	// Effective announced is false (no established peer), even though the
+	// announce side effect fired and announced is locally true.
+	s.metricsM.On("ServiceAnnounced", "test_service", false).Return().Once()
+	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Once()
+
+	strategy, _ := GetStrategyNoOptions("")
+	src := &fakePeerStateSource{states: []announcer.PeerState{{SessionState: 4}}} // not ESTABLISHED
+
+	svc := New("test_service", s.announcerM, []Checker{{s.checkM, ""}}, 1*time.Second, s.metricsM, strategy,
+		WithPeerStateSource(src)).(*service)
+
+	err := svc.run(s.ctx)
+	s.Require().NoError(err)
+	s.Require().True(svc.announced.Load(), "internal announced flag must stay true (side-effect gating unchanged)")
+}
+
+// TestRunPeerStateSourceErrorFallsBackToAnnounced verifies P3: a ListPeers error
+// must be treated as "established" (fall back to locally-confirmed) so a
+// transient peer-state fetch failure never flaps the gauge to 0.
+func (s *serviceTestSuite) TestRunPeerStateSourceErrorFallsBackToAnnounced() {
+	s.announcerM.On("Announce").Return(nil).Once()
+
+	s.checkM.On("Kind").Return("test_check").Once()
+	s.checkM.On("Check").Return(nil).Once()
+
+	s.metricsM.On("ServiceUp", "test_service").Return().Once()
+	s.metricsM.On("ServiceAnnounced", "test_service", true).Return().Once()
+	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Once()
+
+	strategy, _ := GetStrategyNoOptions("")
+	src := &fakePeerStateSource{err: errors.New("list peers failed")}
+
+	svc := New("test_service", s.announcerM, []Checker{{s.checkM, ""}}, 1*time.Second, s.metricsM, strategy,
+		WithPeerStateSource(src)).(*service)
+
+	err := svc.run(s.ctx)
+	s.Require().NoError(err)
+}
+
+// TestRunPeerDriftTracksPeerDrop verifies P3: the reported gauge follows a peer
+// going from ESTABLISHED to down across ticks, while the internal announced flag
+// stays true (no re-announce side effect).
+func (s *serviceTestSuite) TestRunPeerDriftTracksPeerDrop() {
+	s.announcerM.On("Announce").Return(nil).Once()
+
+	s.checkM.On("Kind").Return("test_check").Times(2)
+	s.checkM.On("Check").Return(nil).Times(2)
+
+	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Times(2)
+	s.metricsM.On("ServiceUp", "test_service").Return().Times(2)
+	s.metricsM.On("ServiceAnnounced", "test_service", true).Return().Once()
+	s.metricsM.On("ServiceAnnounced", "test_service", false).Return().Once()
+
+	strategy, _ := GetStrategyNoOptions("")
+	src := &fakePeerStateSource{states: []announcer.PeerState{{SessionState: announcer.PeerSessionEstablished}}}
+
+	svc := New("test_service", s.announcerM, []Checker{{s.checkM, ""}}, 1*time.Second, s.metricsM, strategy,
+		WithPeerStateSource(src)).(*service)
+
+	// Tick 1: announced + established -> gauge true.
+	err := svc.run(s.ctx)
+	s.Require().NoError(err)
+	s.Require().True(svc.announced.Load())
+
+	// Peer drops; effective announced becomes false, but side-effect flag stays true.
+	src.setStates([]announcer.PeerState{{SessionState: 2}})
+	err = svc.run(s.ctx)
+	s.Require().NoError(err)
+	s.Require().True(svc.announced.Load(), "internal announced flag must stay true after peer drop")
+}
+
+// TestRunPeerDriftAnyEstablishedAmongMultiple verifies P3: with multiple peers,
+// the effective gauge is true if ANY one session is ESTABLISHED, regardless of
+// slice position. This pins the "any established" loop rather than a
+// first-element-only read.
+func (s *serviceTestSuite) TestRunPeerDriftAnyEstablishedAmongMultiple() {
+	s.announcerM.On("Announce").Return(nil).Once()
+
+	s.checkM.On("Kind").Return("test_check").Once()
+	s.checkM.On("Check").Return(nil).Once()
+
+	s.metricsM.On("ServiceUp", "test_service").Return().Once()
+	s.metricsM.On("ServiceAnnounced", "test_service", true).Return().Once()
+	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Once()
+
+	strategy, _ := GetStrategyNoOptions("")
+	src := &fakePeerStateSource{states: []announcer.PeerState{
+		{SessionState: 4}, // not ESTABLISHED
+		{SessionState: announcer.PeerSessionEstablished}, // ESTABLISHED later in the slice
+	}}
+
+	svc := New("test_service", s.announcerM, []Checker{{s.checkM, ""}}, 1*time.Second, s.metricsM, strategy,
+		WithPeerStateSource(src)).(*service)
+
+	err := svc.run(s.ctx)
+	s.Require().NoError(err)
+}
+
+// TestRunPeerDriftEmptyPeerList verifies P3: a configured peer-state source that
+// returns an empty peer list (no established session — e.g. before peers are
+// added) reports effective announced false.
+func (s *serviceTestSuite) TestRunPeerDriftEmptyPeerList() {
+	s.announcerM.On("Announce").Return(nil).Once()
+
+	s.checkM.On("Kind").Return("test_check").Once()
+	s.checkM.On("Check").Return(nil).Once()
+
+	s.metricsM.On("ServiceUp", "test_service").Return().Once()
+	s.metricsM.On("ServiceAnnounced", "test_service", false).Return().Once()
+	s.metricsM.On("MeasureCall", "test_service", "test_check").Return().Once()
+
+	strategy, _ := GetStrategyNoOptions("")
+	src := &fakePeerStateSource{states: []announcer.PeerState{}}
+
+	svc := New("test_service", s.announcerM, []Checker{{s.checkM, ""}}, 1*time.Second, s.metricsM, strategy,
+		WithPeerStateSource(src)).(*service)
+
+	err := svc.run(s.ctx)
+	s.Require().NoError(err)
 }

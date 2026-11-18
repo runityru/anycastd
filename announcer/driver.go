@@ -79,6 +79,11 @@ type PeerState struct {
 	Sent       MessageCounter
 }
 
+// PeerSessionEstablished is the SessionState value of an ESTABLISHED BGP
+// session, as normalized into PeerState.SessionState (GoBGP's ESTABLISHED
+// state).
+const PeerSessionEstablished uint32 = 6
+
 // PeerStateSource lists the current state of every configured peer.
 type PeerStateSource interface {
 	ListPeers(ctx context.Context) ([]PeerState, error)

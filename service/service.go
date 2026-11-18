@@ -29,6 +29,7 @@ type service struct {
 	metrics        Metrics
 	strategy       Strategy
 	attemptTracker AttemptTracker
+	peers          announcer.PeerStateSource
 
 	announced *atomic.Bool
 }
@@ -46,6 +47,19 @@ type Option func(*service)
 func WithAttemptTracker(n, m int) Option {
 	return func(s *service) {
 		s.attemptTracker = NewAttemptTracker(n, m)
+	}
+}
+
+// WithPeerStateSource returns an Option that makes the reported announce state
+// reflect peer sessions: a service is only reported announced when it is locally
+// confirmed announced AND at least one BGP peer session is ESTABLISHED. A nil
+// source (the default) is treated as "all peers established", so without this
+// option the gauge reflects the locally-confirmed announce state (legacy
+// behaviour). A transient ListPeers error is tolerated: the service falls back
+// to its locally-confirmed state rather than flapping.
+func WithPeerStateSource(src announcer.PeerStateSource) Option {
+	return func(s *service) {
+		s.peers = src
 	}
 }
 
@@ -133,10 +147,40 @@ func (s *service) run(ctx context.Context) error {
 		}
 	}
 
-	// Record the actual announced state (not the desired one) every tick, so the
-	// gauge reflects what is really on the wire and stays 0 while an announce
-	// side effect keeps failing.
-	s.metrics.ServiceAnnounced(s.name, s.announced.Load())
+	// Record the effective announced state every tick: the prefix is only truly
+	// on the wire when we have locally confirmed the announce AND at least one
+	// BGP peer session is ESTABLISHED. The gauge therefore drops to 0 if the
+	// prefix is not actually being advertised because no peer is up, even when
+	// s.announced is still true. The internal s.announced flag is left untouched
+	// (it only gates the announce/denounce side effects); the `&&` short-circuits
+	// the peer check when not announced.
+	effective := s.announced.Load() && s.anyPeerEstablished(ctx)
+	s.metrics.ServiceAnnounced(s.name, effective)
 
 	return nil
+}
+
+// anyPeerEstablished reports whether at least one configured BGP peer session is
+// ESTABLISHED. With no source injected it reports true (legacy behaviour: the
+// effective announced state equals the locally-confirmed one). A ListPeers error
+// is logged and treated as "established" so a transient failure never flaps the
+// gauge to 0; the caller still trusts the locally-confirmed announce state.
+func (s *service) anyPeerEstablished(ctx context.Context) bool {
+	if s.peers == nil {
+		return true
+	}
+
+	states, err := s.peers.ListPeers(ctx)
+	if err != nil {
+		log.Warnf("failed to list BGP peers: %s", err)
+		return true
+	}
+
+	for _, p := range states {
+		if p.SessionState == announcer.PeerSessionEstablished {
+			return true
+		}
+	}
+
+	return false
 }

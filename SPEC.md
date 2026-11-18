@@ -287,8 +287,12 @@ _service is down_):
    restricts the selector to those two values, so the check is defense-in-depth.
 5. Configure logrus (level + `TextFormatter{FullTimestamp: true}`).
 6. Create an `errgroup` with the signal context.
-7. Create the selected driver via `newGoBGPDriver` and run `driver.Serve()` in
-   the errgroup.
+7. Create the selected driver via `newGoBGPDriver` and run `driver.Serve()` on
+   its **own goroutine, outside the cancellable errgroup** (both engines'
+   `Serve()` loops block and do not return until the server is stopped, so they
+   must not be in the group that must finish during shutdown). `Serve` is
+   terminated by `driver.Stop()` in `shutdown()`; a non-nil `Serve` error is a
+   fatal trigger that stops the process so the prefixes are withdrawn.
 8. `driver.Start(ctx, spec)` — starts the global instance with the configured
    `RouterId`, `Asn`, and `ListenPort: -1` (the embedded gRPC server does not
    listen on an external port), registers peer-state logging, and applies each
@@ -306,7 +310,9 @@ _service is down_):
       (shut down explicitly during shutdown),
     * create and run `announcer.NewMetricsRepository(driver, ...)` (GoBGP
       metrics poller, reading peer state through the driver's `PeerStateSource`).
-11. `g.Wait()` — block until the context is cancelled or a goroutine errors.
+11. Run `g.Wait()` on its own goroutine; on a non-nil error treat it as a
+    shutdown trigger. The main flow then blocks on the root context until a
+    termination signal arrives, at which point `shutdown()` runs.
 
 ### 4.2 Announce / denounce lifecycle (service)
 
@@ -335,12 +341,22 @@ This is **stateful**: prefixes are only re-announced/withdrawn on a hysteresis
 transition, not on every tick. `anycastd_service_up` (step 3) records the raw
 health every tick and may therefore diverge from the actual announced state
 while a streak is below its threshold. `anycastd_service_announced` (updated
-after step 5) records the **actual** BGP announce state from `announced` — `1`
-only once a prefix is really announced, `0` once it is really withdrawn — so it
-reflects what is on the wire (a failed announce/denounce side effect leaves it
-unchanged until the next successful retry). The announce/denounce side effect
-fires at most once per transition; on a failed side effect the flag is not
-changed so the transition is retried on the next tick.
+after step 5) records the **effective** BGP announce state: `1` only when the
+prefix is locally confirmed announced (`announced` set) **and** at least one BGP
+peer session is ESTABLISHED, `0` otherwise. When a peer-state source is wired
+(the real driver), the gauge therefore drops to `0` if every peer session is
+down even while the service is locally announced; with no source it equals the
+locally-confirmed state. A failed `ListPeers` is logged and treated as
+established (no flapping). A failed announce/denounce side effect leaves the
+value unchanged until the next successful retry. The announce/denounce side
+effect fires at most once per transition; on a failed side effect the internal
+`announced` flag is not changed so the transition is retried on the next tick.
+
+The gauge is recomputed once per service `check_interval`, so it can lag a
+peer-state change by up to one interval; `anycastd_gobgp_peer_session_state`
+(polled every 1 s) is the timely indicator of live sessions. A failed
+`ListPeers` is treated as established (fail-open, to avoid flapping), which can
+briefly over-report announced if peer listing fails.
 
 ### 4.3 Announce / denounce mechanics (announcer)
 
@@ -497,12 +513,12 @@ metrics endpoint.
 
 ### 7.1 Core metrics (service)
 
-| Metric                            | Type  | Labels             | Description                                            |
-| --------------------------------- | ----- | ------------------ | ------------------------------------------------------ |
-| `anycastd_up`                     | gauge | `version`          | Application liveness status (always `1` while running) |
-| `anycastd_service_up`             | gauge | `service`          | Service liveness status based on checks (`1`/`0`)      |
-| `anycastd_service_announced`      | gauge | `service`          | Actual BGP announce state (`1` announced, `0` not)     |
-| `anycastd_check_duration_seconds` | gauge | `service`, `check` | Duration of the last check execution in seconds        |
+| Metric                            | Type  | Labels             | Description                                                                            |
+| --------------------------------- | ----- | ------------------ | -------------------------------------------------------------------------------------- |
+| `anycastd_up`                     | gauge | `version`          | Application liveness status (always `1` while running)                                 |
+| `anycastd_service_up`             | gauge | `service`          | Service liveness status based on checks (`1`/`0`)                                      |
+| `anycastd_service_announced`      | gauge | `service`          | Effective announce state (`1` iff locally announced AND ≥1 peer ESTABLISHED, else `0`) |
+| `anycastd_check_duration_seconds` | gauge | `service`, `check` | Duration of the last check execution in seconds                                        |
 
 ### 7.2 GoBGP metrics (announcer)
 

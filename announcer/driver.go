@@ -57,6 +57,49 @@ type MessageCounter struct {
 	WithdrawPrefix uint64
 }
 
+// BfdState is an engine-agnostic snapshot of a peer's BFD session. It carries
+// the full set of fields GoBGP v4 exposes for a BFD session. For engine
+// versions without BFD support (v3), the whole value is the zero struct and
+// Enabled stays false.
+type BfdState struct {
+	// Enabled reports whether the peer has a BFD session configured (GoBGP v4
+	// only; always false for v3, which has no BFD support). All other fields
+	// are only meaningful when Enabled is true.
+	Enabled bool
+	// State is the normalized local BFD session state: 0=down, 1=up. It
+	// carries the legacy BfdState value, so the peer_bfd_state metric is
+	// unchanged.
+	State uint32
+	// RemoteState is the normalized remote BFD session state: 0=down, 1=up.
+	RemoteState uint32
+	// FailureTransitions counts the number of times the BFD session has
+	// transitioned to a failed state (monotonic).
+	FailureTransitions uint64
+	// LastFailureTime is the unix time (seconds) of the last BFD failure.
+	LastFailureTime uint64
+	// LocalDiagnostic is the local BFD diagnostic code (RFC 5880).
+	LocalDiagnostic uint32
+	// RemoteDiagnostic is the remote BFD diagnostic code (RFC 5880).
+	RemoteDiagnostic uint32
+	// LocalDiscriminator is the BFD discriminator of this endpoint.
+	LocalDiscriminator uint32
+	// RemoteDiscriminator is the BFD discriminator of the remote endpoint.
+	RemoteDiscriminator uint32
+	// RemoteMinRxInterval is the remote minimum receive interval in
+	// microseconds.
+	RemoteMinRxInterval uint32
+	// LastPacketTransmitted is the unix time (seconds) the last BFD packet was
+	// transmitted.
+	LastPacketTransmitted uint64
+	// LastPacketReceived is the unix time (seconds) the last BFD packet was
+	// received.
+	LastPacketReceived uint64
+	// TransmittedPackets is the number of BFD packets transmitted (monotonic).
+	TransmittedPackets uint64
+	// ReceivedPackets is the number of BFD packets received (monotonic).
+	ReceivedPackets uint64
+}
+
 // PeerState is an engine-agnostic snapshot of a peer session. AdminState is
 // normalized to 0=up, 1=down, 2=pfx_ct across engine versions.
 type PeerState struct {
@@ -69,14 +112,22 @@ type PeerState struct {
 	SendCommunity   uint32
 	RemovePrivate   uint32
 	PasswordSet     bool
-	// BfdEnabled reports whether the peer has a BFD session configured
-	// (GoBGP v4 only; always false for v3, which has no BFD support).
-	// BfdState is the normalized BFD session state: 0=down, 1=up. Both are
-	// only meaningful when BfdEnabled is true.
-	BfdEnabled bool
-	BfdState   uint32
-	Received   MessageCounter
-	Sent       MessageCounter
+	// Bfd carries the peer's BFD session state. Bfd.Enabled is the legacy
+	// BfdEnabled flag and Bfd.State the legacy BfdState value, so the
+	// peer_bfd_state metric is unchanged.
+	Bfd BfdState
+	// RoutesReceived / RoutesAccepted / RoutesAdvertised are the route counts
+	// summed across the peer's enabled address families. Uptime is the unix
+	// time (seconds) at which the BGP session last came up. RemoteASN / LocalASN
+	// are the peer's and this router's AS numbers for the session.
+	RoutesReceived   uint64
+	RoutesAccepted   uint64
+	RoutesAdvertised uint64
+	Uptime           uint64
+	RemoteASN        uint32
+	LocalASN         uint32
+	Received         MessageCounter
+	Sent             MessageCounter
 }
 
 // PeerSessionEstablished is the SessionState value of an ESTABLISHED BGP

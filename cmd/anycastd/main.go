@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kelseyhightower/envconfig"
+	gobgpmetrics "github.com/osrg/gobgp/v4/pkg/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
@@ -190,6 +191,20 @@ func main() {
 		amr := announcer.NewMetricsRepository(driver, cfg.Announcer.RouterID, prometheus.DefaultRegisterer, log.StandardLogger())
 		if err := amr.Register(); err != nil {
 			panic(err)
+		}
+
+		// Register GoBGP's native FSM-loop timing histograms (fsm_loop_*).
+		// These expose how long each FSM operation and channel wait takes, and
+		// are collected directly from the embedded GoBGP engine. The BGP
+		// collector (bgp_*) is intentionally NOT registered: those metrics are
+		// remapped into the anycastd_gobgp_* series by the announcer repository
+		// above. Registration is idempotent — if another announcer already
+		// registered the collector, an AlreadyRegisteredError is tolerated.
+		if err := prometheus.Register(gobgpmetrics.NewFSMTimingsCollector()); err != nil {
+			var already prometheus.AlreadyRegisteredError
+			if !errors.As(err, &already) {
+				panic(err)
+			}
 		}
 
 		g.Go(func() error {

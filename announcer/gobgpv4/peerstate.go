@@ -35,7 +35,11 @@ func (s *peerStateSource) ListPeers(ctx context.Context) ([]announcer.PeerState,
 		collectBfdState(bfdStates, peerAddress, state)
 	})
 
-	if err := s.srv.ListPeer(ctx, &api.ListPeerRequest{}, func(p *api.Peer) {
+	// EnableAdvertised is required for GoBGP to populate each peer's
+	// AfiSafiState.Advertised (the count of routes this server has advertised
+	// to the peer). Without it the field stays 0 and peer_routes_advertised is
+	// always zero, even though received/accepted still populate from adj-RIB-in.
+	if err := s.srv.ListPeer(ctx, &api.ListPeerRequest{EnableAdvertised: true}, func(p *api.Peer) {
 		ps, ok := s.mapPeer(p)
 		if !ok {
 			return

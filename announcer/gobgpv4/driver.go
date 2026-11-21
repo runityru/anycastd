@@ -8,6 +8,7 @@ import (
 	"github.com/osrg/gobgp/v4/api"
 	"github.com/osrg/gobgp/v4/pkg/apiutil"
 	"github.com/osrg/gobgp/v4/pkg/server"
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/runityru/anycastd/announcer"
@@ -24,6 +25,11 @@ type driver struct {
 	srv    *server.BgpServer
 	logger *slog.Logger
 	bfd    announcer.BfdSpec
+	// fsmTimings is the FSM timing hook+collector wired into the embedded
+	// GoBGP server via TimingHookOption. It is kept on the driver so the
+	// composition root can register the exact same instance with the metrics
+	// registry (registering an unwired instance would report zeros).
+	fsmTimings *FSMTimingsCollector
 	adapter
 	peerStateSource
 }
@@ -38,14 +44,28 @@ type driver struct {
 // Serve runs.
 func NewDriver(spec announcer.DriverSpec, logger *log.Logger) (announcer.Driver, error) {
 	slogger := slog.New(&slogBridge{logger: logger})
-	srv := server.NewBgpServer(server.LoggerOption(slogger, nil))
+	fsmTimings := NewFSMTimingsCollector()
+	srv := server.NewBgpServer(
+		server.LoggerOption(slogger, nil),
+		server.TimingHookOption(fsmTimings),
+	)
 	return &driver{
 		srv:             srv,
 		logger:          slogger,
 		bfd:             spec.Bfd,
+		fsmTimings:      fsmTimings,
 		adapter:         adapter{srv: srv},
 		peerStateSource: peerStateSource{srv: srv, logger: logger},
 	}, nil
+}
+
+// FSMTimingsCollector returns the FSM timing hook+collector that is wired into
+// the embedded GoBGP server. The composition root registers this exact
+// instance with the metrics registry so the observed histograms are exposed;
+// registering any other instance would yield permanent zeros. Returns nil when
+// the engine does not install such a hook.
+func (d *driver) FSMTimingsCollector() prometheus.Collector {
+	return d.fsmTimings
 }
 
 // Serve runs the GoBGP gRPC serve loop until the server is stopped.

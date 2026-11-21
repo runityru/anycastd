@@ -15,7 +15,8 @@ builds:
       - arm64
     mod_timestamp: "{{ .CommitTimestamp }}"
 archives:
-  - format: binary
+  - formats:
+      - binary
 checksum:
   name_template: "checksums.txt"
   algorithm: sha256

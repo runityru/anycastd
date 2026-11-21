@@ -30,7 +30,7 @@ func (s *peerStateSource) ListPeers(ctx context.Context) ([]announcer.PeerState,
 	// Gather the BFD session state of every peer that has a BFD session
 	// configured (GoBGP v4 only). ListBfdPeer only reports peers with an
 	// active BFD config, so a peer's presence here is the "BFD enabled" signal.
-	bfdStates := map[string]api.BfdSessionState{}
+	bfdStates := map[string]announcer.BfdState{}
 	s.srv.ListBfdPeer(ctx, func(peerAddress string, state *api.BfdPeerState) {
 		collectBfdState(bfdStates, peerAddress, state)
 	})
@@ -41,8 +41,7 @@ func (s *peerStateSource) ListPeers(ctx context.Context) ([]announcer.PeerState,
 			return
 		}
 		if bfdState, present := bfdStates[ps.NeighborAddress]; present {
-			ps.BfdEnabled = true
-			ps.BfdState = normalizeBfdState(bfdState)
+			ps.Bfd = bfdState
 		}
 		out = append(out, ps)
 	}); err != nil {
@@ -55,13 +54,47 @@ func (s *peerStateSource) ListPeers(ctx context.Context) ([]announcer.PeerState,
 
 // collectBfdState records the BFD session state of a single peer in m. A nil
 // *api.BfdPeerState (defensive: GoBGP always passes non-nil today) is skipped,
-// leaving the peer treated as BFD-disabled. Extracted so the nil guard is
-// directly unit-testable.
-func collectBfdState(m map[string]api.BfdSessionState, peerAddress string, state *api.BfdPeerState) {
+// leaving the peer treated as BFD-disabled. A nil BfdAsync sub-message is
+// tolerated, leaving the async packet counters at zero. Extracted so the nil
+// guards are directly unit-testable.
+func collectBfdState(m map[string]announcer.BfdState, peerAddress string, state *api.BfdPeerState) {
 	if state == nil {
 		return
 	}
-	m[peerAddress] = state.GetSessionState()
+
+	// The diagnostic codes are int32 protobuf enums; convert them safely,
+	// defaulting to zero if a negative value ever appears on the wire
+	// (gosec G115).
+	localDiag, localErr := enumToUint32("local diagnostic code", int32(state.GetLocalDiagnosticCode()))
+	remoteDiag, remoteErr := enumToUint32("remote diagnostic code", int32(state.GetRemoteDiagnosticCode()))
+	if localErr != nil {
+		localDiag = 0
+	}
+	if remoteErr != nil {
+		remoteDiag = 0
+	}
+
+	bfd := announcer.BfdState{
+		Enabled:             true,
+		State:               normalizeBfdState(state.GetSessionState()),
+		RemoteState:         normalizeBfdState(state.GetRemoteSessionState()),
+		FailureTransitions:  state.GetFailureTransitions(),
+		LastFailureTime:     state.GetLastFailureTime(),
+		LocalDiagnostic:     localDiag,
+		RemoteDiagnostic:    remoteDiag,
+		LocalDiscriminator:  state.GetLocalDiscriminator(),
+		RemoteDiscriminator: state.GetRemoteDiscriminator(),
+		RemoteMinRxInterval: state.GetRemoteMinimumReceiveInterval(),
+	}
+
+	if async := state.GetBfdAsync(); async != nil {
+		bfd.LastPacketTransmitted = async.GetLastPacketTransmitted()
+		bfd.LastPacketReceived = async.GetLastPacketReceived()
+		bfd.TransmittedPackets = async.GetTransmittedPackets()
+		bfd.ReceivedPackets = async.GetReceivedPackets()
+	}
+
+	m[peerAddress] = bfd
 }
 
 // mapPeer maps a single v4 *api.Peer onto announcer.PeerState. A peer that
@@ -95,18 +128,55 @@ func peerStateFromV4(p *api.Peer) (announcer.PeerState, error) {
 	}
 
 	return announcer.PeerState{
-		NeighborAddress: p.GetConf().GetNeighborAddress(),
-		AdminState:      normalizeAdminState(state.GetAdminState()),
-		SessionState:    sessionState,
-		Type:            normalizePeerType(state.GetType()),
-		OutQ:            state.GetOutQ(),
-		Flops:           state.GetFlops(),
-		SendCommunity:   state.GetSendCommunity(),
-		RemovePrivate:   removePrivate,
-		PasswordSet:     state.GetAuthPassword() != "",
-		Received:        messageCounterFromV4(state.GetMessages().GetReceived()),
-		Sent:            messageCounterFromV4(state.GetMessages().GetSent()),
+		NeighborAddress:  p.GetConf().GetNeighborAddress(),
+		AdminState:       normalizeAdminState(state.GetAdminState()),
+		SessionState:     sessionState,
+		Type:             normalizePeerType(state.GetType()),
+		OutQ:             state.GetOutQ(),
+		Flops:            state.GetFlops(),
+		SendCommunity:    state.GetSendCommunity(),
+		RemovePrivate:    removePrivate,
+		PasswordSet:      state.GetAuthPassword() != "",
+		RoutesReceived:   sumAfiSafiCounters(p, (*api.AfiSafiState).GetReceived),
+		RoutesAccepted:   sumAfiSafiCounters(p, (*api.AfiSafiState).GetAccepted),
+		RoutesAdvertised: sumAfiSafiCounters(p, (*api.AfiSafiState).GetAdvertised),
+		Uptime:           uptimeFromV4(p.GetTimers()),
+		RemoteASN:        state.GetPeerAsn(),
+		LocalASN:         state.GetLocalAsn(),
+		Received:         messageCounterFromV4(state.GetMessages().GetReceived()),
+		Sent:             messageCounterFromV4(state.GetMessages().GetSent()),
 	}, nil
+}
+
+// sumAfiSafiCounters sums a per-address-family counter across every AFI/SAFI
+// entry of the peer, guarding against nil entries and nil sub-state. This
+// yields the peer-level route totals that GoBGP exposes per family, without
+// leaking GoBGP types into the engine-agnostic announcer.PeerState.
+func sumAfiSafiCounters(p *api.Peer, counter func(*api.AfiSafiState) uint64) uint64 {
+	var total uint64
+	for _, afiSafi := range p.GetAfiSafis() {
+		if afiSafi == nil {
+			continue
+		}
+		if st := afiSafi.GetState(); st != nil {
+			total += counter(st)
+		}
+	}
+	return total
+}
+
+// uptimeFromV4 returns the unix-second timestamp at which the peer session last
+// came up, or 0 when the timers/state/uptime are unset. A negative uptime (a
+// clock anomaly) maps to 0 so the uint64 conversion never wraps (gosec G115).
+func uptimeFromV4(t *api.Timers) uint64 {
+	if t == nil || t.GetState() == nil || t.GetState().GetUptime() == nil {
+		return 0
+	}
+	secs := t.GetState().GetUptime().GetSeconds()
+	if secs < 0 {
+		return 0
+	}
+	return uint64(secs)
 }
 
 // normalizeAdminState maps GoBGP v4's PeerState_AdminState onto the

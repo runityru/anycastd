@@ -442,6 +442,12 @@ session state). Multihop mode is derived automatically from
 `peer.enable_multihop`. **BFD is v4-only**: with `engine: gobgpv3` and
 `bfd.enabled: true` config validation fails (fail-closed).
 
+The observed BFD state is surfaced per peer through the `anycastd_gobgp_peer_bfd_*`
+metrics (see §7.2), which — in addition to the local session state — expose the
+remote session state, failure transitions, transmitted/received packet counters,
+the remote RFC 5880 diagnostic code, and the last failure time. All BFD series
+are present only when BFD is enabled for the peer.
+
 * **Behavior on BFD-down**: GoBGP performs a hard reset of the peer whose BFD
   session went down. The prefix is simply not delivered to that peer; all other
   peers keep receiving it. anycastd does **not** withdraw the announcement.
@@ -526,42 +532,75 @@ Registered with namespace `anycastd`, subsystem `gobgp`. All are gauges.
 Labels: `peer_count` uses `router_id`; all others use `router_id, peer`. They
 are polled every **1 second** by `announcer.NewMetricsRepository(...).Run`.
 
-| Metric name                                        | Labels            |
-| -------------------------------------------------- | ----------------- |
-| `anycastd_gobgp_peer_count`                        | `router_id`       |
-| `anycastd_gobgp_peer_admin_state`                  | `router_id, peer` |
-| `anycastd_gobgp_peer_bfd_state`                    | `router_id, peer` |
-| `anycastd_gobgp_peer_session_state`                | `router_id, peer` |
-| `anycastd_gobgp_peer_out_queue_count`              | `router_id, peer` |
-| `anycastd_gobgp_peer_flops_count`                  | `router_id, peer` |
-| `anycastd_gobgp_peer_send_community_flag`          | `router_id, peer` |
-| `anycastd_gobgp_peer_remove_private_flag`          | `router_id, peer` |
-| `anycastd_gobgp_peer_password_set_flag`            | `router_id, peer` |
-| `anycastd_gobgp_peer_type`                         | `router_id, peer` |
-| `anycastd_gobgp_received_messages_total`           | `router_id, peer` |
-| `anycastd_gobgp_received_messages_notification`    | `router_id, peer` |
-| `anycastd_gobgp_received_messages_update`          | `router_id, peer` |
-| `anycastd_gobgp_received_messages_open`            | `router_id, peer` |
-| `anycastd_gobgp_received_messages_keepalive`       | `router_id, peer` |
-| `anycastd_gobgp_received_messages_refresh`         | `router_id, peer` |
-| `anycastd_gobgp_received_messages_withdraw_update` | `router_id, peer` |
-| `anycastd_gobgp_received_messages_withdraw_prefix` | `router_id, peer` |
-| `anycastd_gobgp_sent_messages_total`               | `router_id, peer` |
-| `anycastd_gobgp_sent_messages_notification`        | `router_id, peer` |
-| `anycastd_gobgp_sent_messages_update`              | `router_id, peer` |
-| `anycastd_gobgp_sent_messages_open`                | `router_id, peer` |
-| `anycastd_gobgp_sent_messages_keepalive`           | `router_id, peer` |
-| `anycastd_gobgp_sent_messages_refresh`             | `router_id, peer` |
-| `anycastd_gobgp_sent_messages_withdraw_update`     | `router_id, peer` |
-| `anycastd_gobgp_sent_messages_withdraw_prefix`     | `router_id, peer` |
+| Metric name                                         | Labels            |
+| --------------------------------------------------- | ----------------- |
+| `anycastd_gobgp_peer_count`                         | `router_id`       |
+| `anycastd_gobgp_peer_admin_state`                   | `router_id, peer` |
+| `anycastd_gobgp_peer_asn`                           | `router_id, peer` |
+| `anycastd_gobgp_peer_bfd_failure_transitions`       | `router_id, peer` |
+| `anycastd_gobgp_peer_bfd_last_failure_time_seconds` | `router_id, peer` |
+| `anycastd_gobgp_peer_bfd_packets_received`          | `router_id, peer` |
+| `anycastd_gobgp_peer_bfd_packets_transmitted`       | `router_id, peer` |
+| `anycastd_gobgp_peer_bfd_remote_diagnostic_code`    | `router_id, peer` |
+| `anycastd_gobgp_peer_bfd_remote_state`              | `router_id, peer` |
+| `anycastd_gobgp_peer_bfd_state`                     | `router_id, peer` |
+| `anycastd_gobgp_peer_session_state`                 | `router_id, peer` |
+| `anycastd_gobgp_peer_out_queue_count`               | `router_id, peer` |
+| `anycastd_gobgp_peer_flops_count`                   | `router_id, peer` |
+| `anycastd_gobgp_peer_send_community_flag`           | `router_id, peer` |
+| `anycastd_gobgp_peer_remove_private_flag`           | `router_id, peer` |
+| `anycastd_gobgp_peer_password_set_flag`             | `router_id, peer` |
+| `anycastd_gobgp_peer_local_asn`                     | `router_id, peer` |
+| `anycastd_gobgp_peer_type`                          | `router_id, peer` |
+| `anycastd_gobgp_peer_routes_received`               | `router_id, peer` |
+| `anycastd_gobgp_peer_routes_accepted`               | `router_id, peer` |
+| `anycastd_gobgp_peer_routes_advertised`             | `router_id, peer` |
+| `anycastd_gobgp_peer_uptime_seconds`                | `router_id, peer` |
+| `anycastd_gobgp_received_messages_total`            | `router_id, peer` |
+| `anycastd_gobgp_received_messages_notification`     | `router_id, peer` |
+| `anycastd_gobgp_received_messages_update`           | `router_id, peer` |
+| `anycastd_gobgp_received_messages_open`             | `router_id, peer` |
+| `anycastd_gobgp_received_messages_keepalive`        | `router_id, peer` |
+| `anycastd_gobgp_received_messages_refresh`          | `router_id, peer` |
+| `anycastd_gobgp_received_messages_withdraw_update`  | `router_id, peer` |
+| `anycastd_gobgp_received_messages_withdraw_prefix`  | `router_id, peer` |
+| `anycastd_gobgp_sent_messages_total`                | `router_id, peer` |
+| `anycastd_gobgp_sent_messages_notification`         | `router_id, peer` |
+| `anycastd_gobgp_sent_messages_update`               | `router_id, peer` |
+| `anycastd_gobgp_sent_messages_open`                 | `router_id, peer` |
+| `anycastd_gobgp_sent_messages_keepalive`            | `router_id, peer` |
+| `anycastd_gobgp_sent_messages_refresh`              | `router_id, peer` |
+| `anycastd_gobgp_sent_messages_withdraw_update`      | `router_id, peer` |
+| `anycastd_gobgp_sent_messages_withdraw_prefix`      | `router_id, peer` |
 
 `peer_password_set_flag` is set from `PeerState.PasswordSet` (mapped from the
 GoBGP peer's `AuthPassword`); because anycastd does not configure peer
 authentication (see §8), it is normally `0`.
 
-`anycastd_gobgp_peer_bfd_state` reports the BFD session state of a peer
-(`1` = up, `0` = down) as read via GoBGP `ListBfdPeer`; it is present only
-when BFD is enabled (GoBGP v4).
+The `peer_routes_{received,accepted,advertised}` counters are **summed across
+all address families** for the peer; `peer_uptime_seconds` is the unix time at
+which the BGP session with the peer last came up; `peer_asn` / `peer_local_asn`
+report the remote and local AS numbers.
+
+The `anycastd_gobgp_peer_bfd_*` series are emitted **only when BFD is enabled**
+for a peer (GoBGP v4), matching the semantics of `anycastd_gobgp_peer_bfd_state`
+(`1` = up, `0` = down, read via GoBGP `ListBfdPeer`). The BFD state now carries
+richer fields per peer:
+
+* `peer_bfd_remote_state` — remote session state (`0` = down, `1` = up);
+* `peer_bfd_failure_transitions` — monotonic count of BFD failure transitions
+  (snapshot, so no `_total` suffix);
+* `peer_bfd_packets_transmitted` / `peer_bfd_packets_received` — monotonic
+  packet counter snapshots;
+* `peer_bfd_remote_diagnostic_code` — RFC 5880 diagnostic code;
+* `peer_bfd_last_failure_time_seconds` — unix time of the last BFD failure.
+
+In addition to the remapped `anycastd_gobgp_*` series, GoBGP's native
+FSM-timing histograms are registered in `cmd/anycastd/main.go` under the
+`fsm_loop_*` namespace (`fsm_loop_{mgmt_op,accept,event,message}_{timing_sec,wait_sec}`)
+via `NewFSMTimingsCollector()`. The GoBGP `bgp_*` collector is intentionally
+**not** registered — its data is remapped into the `anycastd_gobgp_*` series
+above.
 
 ### 7.3 Checker metrics
 

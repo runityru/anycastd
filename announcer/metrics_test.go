@@ -38,8 +38,28 @@ func peer(neighbor string, passwordSet bool) PeerState {
 		SendCommunity:   4,
 		RemovePrivate:   5,
 		PasswordSet:     passwordSet,
-		BfdEnabled:      true,
-		BfdState:        1,
+		Bfd: BfdState{
+			Enabled:               true,
+			State:                 1,
+			RemoteState:           1,
+			FailureTransitions:    2,
+			LastFailureTime:       3,
+			LocalDiagnostic:       4,
+			RemoteDiagnostic:      5,
+			LocalDiscriminator:    6,
+			RemoteDiscriminator:   7,
+			RemoteMinRxInterval:   8,
+			LastPacketTransmitted: 9,
+			LastPacketReceived:    10,
+			TransmittedPackets:    11,
+			ReceivedPackets:       12,
+		},
+		RoutesReceived:   31,
+		RoutesAccepted:   32,
+		RoutesAdvertised: 33,
+		Uptime:           34,
+		RemoteASN:        35,
+		LocalASN:         36,
 		Received: MessageCounter{
 			Total: 11, Notification: 12, Update: 13, Open: 14, Keepalive: 15,
 			Refresh: 16, WithdrawUpdate: 17, WithdrawPrefix: 18,
@@ -86,12 +106,25 @@ func TestMetricsRepositoryAllGauges(t *testing.T) {
 		{"peer_admin_state", func() prometheus.Collector { return m.peerAdminState }, 0},
 		{"peer_session_state", func() prometheus.Collector { return m.peerSessionState }, 6},
 		{"peer_bfd_state", func() prometheus.Collector { return m.peerBfdState }, 1},
+		{"peer_bfd_remote_state", func() prometheus.Collector { return m.peerBfdRemoteState }, 1},
+		{"peer_bfd_failure_transitions", func() prometheus.Collector { return m.peerBfdFailureTransitions }, 2},
+		{"peer_bfd_packets_transmitted", func() prometheus.Collector { return m.peerBfdPacketsTransmitted }, 11},
+		{"peer_bfd_packets_received", func() prometheus.Collector { return m.peerBfdPacketsReceived }, 12},
+		{"peer_bfd_remote_diagnostic_code", func() prometheus.Collector { return m.peerBfdRemoteDiagnosticCode }, 5},
+		{"peer_bfd_last_failure_time_seconds", func() prometheus.Collector { return m.peerBfdLastFailureTime }, 3},
 		{"peer_out_queue_count", func() prometheus.Collector { return m.bgpPeerOutQueueCount }, 2},
 		{"peer_flops_count", func() prometheus.Collector { return m.bgpPeerFlopsCount }, 3},
 		{"peer_send_community_flag", func() prometheus.Collector { return m.bgpPeerSendCommunityFlag }, 4},
 		{"peer_remove_private_flag", func() prometheus.Collector { return m.bgpPeerRemovePrivateFlag }, 5},
 		{"peer_password_set_flag", func() prometheus.Collector { return m.bgpPeerPasswordSetFlag }, 1},
 		{"peer_type", func() prometheus.Collector { return m.bgpPeerType }, 1},
+
+		{"peer_routes_received", func() prometheus.Collector { return m.peerRoutesReceived }, 31},
+		{"peer_routes_accepted", func() prometheus.Collector { return m.peerRoutesAccepted }, 32},
+		{"peer_routes_advertised", func() prometheus.Collector { return m.peerRoutesAdvertised }, 33},
+		{"peer_uptime_seconds", func() prometheus.Collector { return m.peerUptime }, 34},
+		{"peer_asn", func() prometheus.Collector { return m.peerAsn }, 35},
+		{"peer_local_asn", func() prometheus.Collector { return m.peerLocalAsn }, 36},
 
 		{"received_messages_total", func() prometheus.Collector { return m.receivedMessagesTotal }, 11},
 		{"received_messages_notification", func() prometheus.Collector { return m.receivedMessagesNotification }, 12},
@@ -112,7 +145,7 @@ func TestMetricsRepositoryAllGauges(t *testing.T) {
 		{"sent_messages_withdraw_prefix", func() prometheus.Collector { return m.sentMessagesWithdrawPrefix }, 28},
 	}
 
-	r.Len(cases, 26, "must assert exactly 26 gauges")
+	r.Len(cases, 38, "must assert exactly 38 gauges")
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			require.Equal(t, c.want, testutil.ToFloat64(c.metric()))
@@ -139,7 +172,7 @@ func TestMetricsRepositoryBfdDisabled(t *testing.T) {
 	r := require.New(t)
 
 	p := peer("10.0.0.3", false)
-	p.BfdEnabled = false
+	p.Bfd.Enabled = false
 	m := newTestMetrics(t, &fakePeerStateSource{states: []PeerState{p}})
 
 	m.collect(context.Background())
@@ -153,8 +186,8 @@ func TestMetricsRepositoryBfdDown(t *testing.T) {
 	r := require.New(t)
 
 	p := peer("10.0.0.4", false)
-	p.BfdEnabled = true
-	p.BfdState = 0
+	p.Bfd.Enabled = true
+	p.Bfd.State = 0
 	m := newTestMetrics(t, &fakePeerStateSource{states: []PeerState{p}})
 
 	m.collect(context.Background())

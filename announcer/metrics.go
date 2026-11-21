@@ -19,6 +19,20 @@ type metrics struct {
 	peerSessionState *prometheus.GaugeVec
 	peerBfdState     *prometheus.GaugeVec
 
+	peerBfdRemoteState          *prometheus.GaugeVec
+	peerBfdFailureTransitions   *prometheus.GaugeVec
+	peerBfdPacketsTransmitted   *prometheus.GaugeVec
+	peerBfdPacketsReceived      *prometheus.GaugeVec
+	peerBfdRemoteDiagnosticCode *prometheus.GaugeVec
+	peerBfdLastFailureTime      *prometheus.GaugeVec
+
+	peerRoutesReceived   *prometheus.GaugeVec
+	peerRoutesAccepted   *prometheus.GaugeVec
+	peerRoutesAdvertised *prometheus.GaugeVec
+	peerUptime           *prometheus.GaugeVec
+	peerAsn              *prometheus.GaugeVec
+	peerLocalAsn         *prometheus.GaugeVec
+
 	receivedMessagesTotal          *prometheus.GaugeVec
 	receivedMessagesNotification   *prometheus.GaugeVec
 	receivedMessagesUpdate         *prometheus.GaugeVec
@@ -89,6 +103,115 @@ func NewMetricsRepository(src PeerStateSource, routerID string, reg prometheus.R
 				Subsystem: "gobgp",
 				Name:      "peer_bfd_state",
 				Help:      "BFD session state of the peer 0=down, 1=up (present only when BFD is enabled, GoBGP v4)",
+			},
+			[]string{"router_id", "peer"},
+		),
+		peerBfdRemoteState: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: "anycastd",
+				Subsystem: "gobgp",
+				Name:      "peer_bfd_remote_state",
+				Help:      "Remote BFD session state of the peer 0=down, 1=up (present only when BFD is enabled, GoBGP v4)",
+			},
+			[]string{"router_id", "peer"},
+		),
+		peerBfdFailureTransitions: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: "anycastd",
+				Subsystem: "gobgp",
+				Name:      "peer_bfd_failure_transitions",
+				Help:      "Number of BFD session failure transitions (monotonic; present only when BFD is enabled, GoBGP v4)",
+			},
+			[]string{"router_id", "peer"},
+		),
+		peerBfdPacketsTransmitted: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: "anycastd",
+				Subsystem: "gobgp",
+				Name:      "peer_bfd_packets_transmitted",
+				Help:      "Number of BFD packets transmitted (monotonic; present only when BFD is enabled, GoBGP v4)",
+			},
+			[]string{"router_id", "peer"},
+		),
+		peerBfdPacketsReceived: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: "anycastd",
+				Subsystem: "gobgp",
+				Name:      "peer_bfd_packets_received",
+				Help:      "Number of BFD packets received (monotonic; present only when BFD is enabled, GoBGP v4)",
+			},
+			[]string{"router_id", "peer"},
+		),
+		peerBfdRemoteDiagnosticCode: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: "anycastd",
+				Subsystem: "gobgp",
+				Name:      "peer_bfd_remote_diagnostic_code",
+				Help:      "Remote BFD diagnostic code (RFC 5880; present only when BFD is enabled, GoBGP v4)",
+			},
+			[]string{"router_id", "peer"},
+		),
+		peerBfdLastFailureTime: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: "anycastd",
+				Subsystem: "gobgp",
+				Name:      "peer_bfd_last_failure_time_seconds",
+				Help:      "Unix time in seconds of the last BFD failure (present only when BFD is enabled, GoBGP v4)",
+			},
+			[]string{"router_id", "peer"},
+		),
+
+		peerRoutesReceived: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: "anycastd",
+				Subsystem: "gobgp",
+				Name:      "peer_routes_received",
+				Help:      "Number of routes received from the peer, summed across address families",
+			},
+			[]string{"router_id", "peer"},
+		),
+		peerRoutesAccepted: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: "anycastd",
+				Subsystem: "gobgp",
+				Name:      "peer_routes_accepted",
+				Help:      "Number of routes accepted from the peer, summed across address families",
+			},
+			[]string{"router_id", "peer"},
+		),
+		peerRoutesAdvertised: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: "anycastd",
+				Subsystem: "gobgp",
+				Name:      "peer_routes_advertised",
+				Help:      "Number of routes advertised to the peer, summed across address families",
+			},
+			[]string{"router_id", "peer"},
+		),
+		peerUptime: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: "anycastd",
+				Subsystem: "gobgp",
+				Name:      "peer_uptime_seconds",
+				Help:      "Unix time in seconds at which the BGP session with the peer last came up",
+			},
+			[]string{"router_id", "peer"},
+		),
+		peerAsn: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: "anycastd",
+				Subsystem: "gobgp",
+				Name:      "peer_asn",
+				Help:      "AS number of the peer",
+			},
+			[]string{"router_id", "peer"},
+		),
+		peerLocalAsn: prometheus.NewGaugeVec(
+			prometheus.GaugeOpts{
+				Namespace: "anycastd",
+				Subsystem: "gobgp",
+				Name:      "peer_local_asn",
+				Help:      "AS number presented to the peer by this router",
 			},
 			[]string{"router_id", "peer"},
 		),
@@ -331,11 +454,41 @@ func (m *metrics) collect(ctx context.Context) {
 		// The BFD state series is emitted only for peers that have BFD enabled
 		// (GoBGP v4). Peers without BFD never get a series, matching the
 		// documented semantics "present only when BFD is enabled".
-		if peer.BfdEnabled {
+		if peer.Bfd.Enabled {
 			m.peerBfdState.WithLabelValues(
 				m.routerID,
 				peerRouterID,
-			).Set(float64(peer.BfdState))
+			).Set(float64(peer.Bfd.State))
+
+			m.peerBfdRemoteState.WithLabelValues(
+				m.routerID,
+				peerRouterID,
+			).Set(float64(peer.Bfd.RemoteState))
+
+			m.peerBfdFailureTransitions.WithLabelValues(
+				m.routerID,
+				peerRouterID,
+			).Set(float64(peer.Bfd.FailureTransitions))
+
+			m.peerBfdPacketsTransmitted.WithLabelValues(
+				m.routerID,
+				peerRouterID,
+			).Set(float64(peer.Bfd.TransmittedPackets))
+
+			m.peerBfdPacketsReceived.WithLabelValues(
+				m.routerID,
+				peerRouterID,
+			).Set(float64(peer.Bfd.ReceivedPackets))
+
+			m.peerBfdRemoteDiagnosticCode.WithLabelValues(
+				m.routerID,
+				peerRouterID,
+			).Set(float64(peer.Bfd.RemoteDiagnostic))
+
+			m.peerBfdLastFailureTime.WithLabelValues(
+				m.routerID,
+				peerRouterID,
+			).Set(float64(peer.Bfd.LastFailureTime))
 		}
 
 		m.bgpPeerOutQueueCount.WithLabelValues(
@@ -367,6 +520,36 @@ func (m *metrics) collect(ctx context.Context) {
 			m.routerID,
 			peerRouterID,
 		).Set(float64(peer.Type))
+
+		m.peerRoutesReceived.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.RoutesReceived))
+
+		m.peerRoutesAccepted.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.RoutesAccepted))
+
+		m.peerRoutesAdvertised.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.RoutesAdvertised))
+
+		m.peerUptime.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.Uptime))
+
+		m.peerAsn.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.RemoteASN))
+
+		m.peerLocalAsn.WithLabelValues(
+			m.routerID,
+			peerRouterID,
+		).Set(float64(peer.LocalASN))
 
 		m.receivedMessagesTotal.WithLabelValues(
 			m.routerID,
@@ -482,6 +665,20 @@ func (m *metrics) Register() error {
 		m.peerAdminState,
 		m.peerSessionState,
 		m.peerBfdState,
+
+		m.peerBfdRemoteState,
+		m.peerBfdFailureTransitions,
+		m.peerBfdPacketsTransmitted,
+		m.peerBfdPacketsReceived,
+		m.peerBfdRemoteDiagnosticCode,
+		m.peerBfdLastFailureTime,
+
+		m.peerRoutesReceived,
+		m.peerRoutesAccepted,
+		m.peerRoutesAdvertised,
+		m.peerUptime,
+		m.peerAsn,
+		m.peerLocalAsn,
 
 		m.bgpPeerOutQueueCount,
 		m.bgpPeerFlopsCount,

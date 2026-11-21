@@ -11,6 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/runityru/anycastd/announcer"
 )
@@ -192,16 +193,15 @@ func awaitPeerState(t *testing.T, src announcer.PeerStateSource, addr string) an
 	return ps
 }
 
-// TestPeerStateSourceBFD exercises the ListBfdPeer -> PeerState.BfdEnabled /
-// BfdState bridge in peerStateSource.ListPeers against a real in-memory GoBGP
-// v4 server with a live BFD session (reusing the bfd_integration_test
-// topology), so the metric's source of truth (peer_bfd_state) is verified
-// end to end.
+// TestPeerStateSourceBFD exercises the ListBfdPeer -> PeerState.Bfd bridge in
+// peerStateSource.ListPeers against a real in-memory GoBGP v4 server with a
+// live BFD session (reusing the bfd_integration_test topology), so the
+// metric's source of truth (peer_bfd_state) is verified end to end.
 func TestPeerStateSourceBFD(t *testing.T) {
 	logger := log.New()
 	logger.SetOutput(io.Discard)
 
-	t.Run("BFD session up maps to BfdEnabled=true BfdState=1", func(t *testing.T) {
+	t.Run("BFD session up maps to Bfd.Enabled=true Bfd.State=1", func(t *testing.T) {
 		peer := newBfdTestPeer(t, "udp4", server.BfdServerPort)
 		defer peer.close()
 		bfdPort := uint16(peer.Port())
@@ -214,11 +214,14 @@ func TestPeerStateSourceBFD(t *testing.T) {
 
 		ps := awaitPeerState(t, NewPeerStateSource(srv, logger), "127.0.0.1")
 		r := require.New(t)
-		r.True(ps.BfdEnabled)
-		r.Equal(uint32(1), ps.BfdState)
+		r.True(ps.Bfd.Enabled)
+		r.Equal(uint32(1), ps.Bfd.State)
+		// A freshly-established UP session must not yet have recorded any
+		// failure transition.
+		r.Equal(uint64(0), ps.Bfd.FailureTransitions)
 	})
 
-	t.Run("BFD session down maps to BfdEnabled=true BfdState=0", func(t *testing.T) {
+	t.Run("BFD session down maps to Bfd.Enabled=true Bfd.State=0", func(t *testing.T) {
 		// BFD enabled towards a port nothing listens on: the session exists but
 		// stays DOWN, and is still reported by ListBfdPeer.
 		bfdPort := uint16(65400)
@@ -229,11 +232,11 @@ func TestPeerStateSourceBFD(t *testing.T) {
 
 		ps := awaitPeerState(t, NewPeerStateSource(srv, logger), "127.0.0.1")
 		r := require.New(t)
-		r.True(ps.BfdEnabled)
-		r.Equal(uint32(0), ps.BfdState)
+		r.True(ps.Bfd.Enabled)
+		r.Equal(uint32(0), ps.Bfd.State)
 	})
 
-	t.Run("BFD disabled leaves BfdEnabled=false BfdState=0", func(t *testing.T) {
+	t.Run("BFD disabled leaves Bfd.Enabled=false Bfd.State=0", func(t *testing.T) {
 		srv := startBFDDriver(t,
 			announcer.PeerSpec{Name: "no-bfd", RemoteAddress: "127.0.0.1", RemoteASN: 65000, LocalAddress: "127.0.0.1"},
 			announcer.BfdSpec{Enabled: false},
@@ -241,22 +244,99 @@ func TestPeerStateSourceBFD(t *testing.T) {
 
 		ps := awaitPeerState(t, NewPeerStateSource(srv, logger), "127.0.0.1")
 		r := require.New(t)
-		r.False(ps.BfdEnabled)
-		r.Equal(uint32(0), ps.BfdState)
+		r.False(ps.Bfd.Enabled)
+		r.Equal(uint32(0), ps.Bfd.State)
 	})
 }
 
-// TestCollectBfdState covers the defensive nil guard in the ListBfdPeer
+// TestCollectBfdState covers the defensive nil guards in the ListBfdPeer
 // callback: a nil *api.BfdPeerState leaves the peer BFD-disabled, a non-nil
-// state is recorded.
+// state is recorded with every field populated, and a nil BfdAsync sub-message
+// leaves the async packet counters at zero.
 func TestCollectBfdState(t *testing.T) {
 	r := require.New(t)
-	m := map[string]api.BfdSessionState{}
+	m := map[string]announcer.BfdState{}
 
+	// A nil *api.BfdPeerState is skipped entirely.
 	collectBfdState(m, "10.0.0.1", nil)
 	r.NotContains(m, "10.0.0.1")
 
-	collectBfdState(m, "10.0.0.2", &api.BfdPeerState{SessionState: api.BfdSessionState_BFD_SESSION_STATE_UP})
+	// A fully-populated state round-trips into every engine-agnostic field.
+	collectBfdState(m, "10.0.0.2", &api.BfdPeerState{
+		SessionState:                 api.BfdSessionState_BFD_SESSION_STATE_UP,
+		RemoteSessionState:           api.BfdSessionState_BFD_SESSION_STATE_UP,
+		LastFailureTime:              1234,
+		FailureTransitions:           7,
+		LocalDiscriminator:           100,
+		RemoteDiscriminator:          200,
+		LocalDiagnosticCode:          api.BfdDiagnosticCode_BFD_DIAGNOSTIC_CODE_PATH_DOWN,
+		RemoteDiagnosticCode:         api.BfdDiagnosticCode_BFD_DIAGNOSTIC_CODE_DETECTION_TIMEOUT,
+		RemoteMinimumReceiveInterval: 100000,
+		BfdAsync: &api.BfdAsyncCounters{
+			LastPacketTransmitted: 111,
+			LastPacketReceived:    222,
+			TransmittedPackets:    333,
+			ReceivedPackets:       444,
+		},
+	})
 	r.Contains(m, "10.0.0.2")
-	r.Equal(api.BfdSessionState_BFD_SESSION_STATE_UP, m["10.0.0.2"])
+	r.Equal(true, m["10.0.0.2"].Enabled)
+	r.Equal(uint32(1), m["10.0.0.2"].State)
+	r.Equal(uint32(1), m["10.0.0.2"].RemoteState)
+	r.Equal(uint64(1234), m["10.0.0.2"].LastFailureTime)
+	r.Equal(uint64(7), m["10.0.0.2"].FailureTransitions)
+	r.Equal(uint32(100), m["10.0.0.2"].LocalDiscriminator)
+	r.Equal(uint32(200), m["10.0.0.2"].RemoteDiscriminator)
+	r.Equal(uint32(5), m["10.0.0.2"].LocalDiagnostic)
+	r.Equal(uint32(1), m["10.0.0.2"].RemoteDiagnostic)
+	r.Equal(uint32(100000), m["10.0.0.2"].RemoteMinRxInterval)
+	r.Equal(uint64(111), m["10.0.0.2"].LastPacketTransmitted)
+	r.Equal(uint64(222), m["10.0.0.2"].LastPacketReceived)
+	r.Equal(uint64(333), m["10.0.0.2"].TransmittedPackets)
+	r.Equal(uint64(444), m["10.0.0.2"].ReceivedPackets)
+
+	// A nil BfdAsync sub-message is tolerated: the state maps with zero async
+	// packet counters instead of panicking.
+	collectBfdState(m, "10.0.0.3", &api.BfdPeerState{
+		SessionState: api.BfdSessionState_BFD_SESSION_STATE_DOWN,
+	})
+	r.Contains(m, "10.0.0.3")
+	r.Equal(uint32(0), m["10.0.0.3"].State)
+	r.Equal(uint64(0), m["10.0.0.3"].TransmittedPackets)
+	r.Equal(uint64(0), m["10.0.0.3"].ReceivedPackets)
+}
+
+// TestPeerStateFromV4RouteAndASN asserts that peerStateFromV4 sums the route
+// counters across the peer's AFI/SAFI entries and carries the timers/ASN
+// values through, without leaking GoBGP types into announcer.PeerState.
+func TestPeerStateFromV4RouteAndASN(t *testing.T) {
+	r := require.New(t)
+
+	uptime := &timestamppb.Timestamp{Seconds: 1700000000}
+	p := &api.Peer{
+		Conf: &api.PeerConf{NeighborAddress: "192.0.2.1"},
+		State: &api.PeerState{
+			SessionState: api.PeerState_SessionState(6),
+			PeerAsn:      65001,
+			LocalAsn:     65000,
+		},
+		Timers: &api.Timers{
+			State: &api.TimersState{Uptime: uptime},
+		},
+		AfiSafis: []*api.AfiSafi{
+			{State: &api.AfiSafiState{Received: 10, Accepted: 11, Advertised: 12}},
+			{State: &api.AfiSafiState{Received: 20, Accepted: 21, Advertised: 22}},
+			nil, // nil entry must be skipped
+			{},  // entry with nil state must be skipped
+		},
+	}
+
+	ps, err := peerStateFromV4(p)
+	r.NoError(err)
+	r.Equal(uint64(30), ps.RoutesReceived)
+	r.Equal(uint64(32), ps.RoutesAccepted)
+	r.Equal(uint64(34), ps.RoutesAdvertised)
+	r.Equal(uint64(1700000000), ps.Uptime)
+	r.Equal(uint32(65001), ps.RemoteASN)
+	r.Equal(uint32(65000), ps.LocalASN)
 }

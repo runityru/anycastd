@@ -193,6 +193,72 @@ func awaitPeerState(t *testing.T, src announcer.PeerStateSource, addr string) an
 	return ps
 }
 
+// TestPeerStateSourceAdvertisedRoutes proves that ListPeers requests
+// EnableAdvertised so GoBGP populates each peer's AfiSafiState.Advertised —
+// without it the field (and therefore announcer.PeerState.RoutesAdvertised) is
+// always zero. It advertises a real path over a live in-memory BGP session and
+// asserts the peer's RoutesAdvertised becomes non-zero, confirming the request
+// flag is honored end to end.
+func TestPeerStateSourceAdvertisedRoutes(t *testing.T) {
+	r := require.New(t)
+	ctx := t.Context()
+
+	srv := server.NewBgpServer()
+	go srv.Serve()
+	defer srv.Stop()
+	r.NoError(srv.StartBgp(ctx, &api.StartBgpRequest{
+		Global: &api.Global{RouterId: "10.3.3.3", Asn: 65999, ListenPort: -1},
+	}))
+
+	l, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", "0"))
+	if err != nil {
+		t.Skipf("no IPv4 loopback: %s", err)
+	}
+	port := l.Addr().(*net.TCPAddr).Port
+	r.NoError(l.Close())
+
+	peer := server.NewBgpServer()
+	go peer.Serve()
+	defer peer.Stop()
+	r.NoError(peer.StartBgp(ctx, &api.StartBgpRequest{
+		Global: &api.Global{RouterId: "10.4.4.4", Asn: 65000, ListenPort: int32(port), ListenAddresses: []string{"127.0.0.1"}},
+	}))
+	r.NoError(peer.AddPeer(ctx, &api.AddPeerRequest{Peer: &api.Peer{
+		Conf:      &api.PeerConf{NeighborAddress: "127.0.0.1", PeerAsn: 65999},
+		Transport: &api.Transport{PassiveMode: true},
+	}}))
+	r.NoError(srv.AddPeer(ctx, &api.AddPeerRequest{Peer: &api.Peer{
+		Conf:      &api.PeerConf{NeighborAddress: "127.0.0.1", PeerAsn: 65000},
+		Transport: &api.Transport{LocalAddress: "127.0.0.1", RemotePort: uint32(port)},
+		Timers:    &api.Timers{Config: &api.TimersConfig{ConnectRetry: 1}},
+	}}))
+
+	logger := log.New()
+	logger.SetOutput(io.Discard)
+	src := NewPeerStateSource(srv, logger)
+
+	// Advertise one path from srv to the peer; srv's view of that peer must
+	// eventually report it as an advertised route.
+	r.NoError(NewAdapter(srv).AddPath(ctx, "10.0.0.128/32"))
+
+	// require.Eventually is used (not EventuallyWithT) so the condition must
+	// genuinely become true: EventuallyWithT treats a closure that merely runs
+	// without an assertion failure as success, which would make this test pass
+	// even when EnableAdvertised is missing.
+	r.Eventually(func() bool {
+		states, err := src.ListPeers(ctx)
+		if err != nil {
+			return false
+		}
+		for i := range states {
+			if states[i].NeighborAddress == "127.0.0.1" && states[i].RoutesAdvertised == 1 {
+				return true
+			}
+		}
+		return false
+	}, 10*time.Second, 100*time.Millisecond, "advertised route never reflected in RoutesAdvertised")
+}
+
 // TestPeerStateSourceBFD exercises the ListBfdPeer -> PeerState.Bfd bridge in
 // peerStateSource.ListPeers against a real in-memory GoBGP v4 server with a
 // live BFD session (reusing the bfd_integration_test topology), so the

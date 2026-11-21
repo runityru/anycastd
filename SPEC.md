@@ -528,13 +528,22 @@ metrics endpoint.
 
 ### 7.2 GoBGP metrics (announcer)
 
-Registered with namespace `anycastd`, subsystem `gobgp`. All are gauges.
-Labels: `peer_count` uses `router_id`; all others use `router_id, peer`. They
-are polled every **1 second** by `announcer.NewMetricsRepository(...).Run`.
+Registered with namespace `anycastd`, subsystem `gobgp`. All are gauges, with
+the exception of the `anycastd_gobgp_fsm_*` histograms described below. Labels:
+`peer_count` uses `router_id`; the peer metrics use `router_id, peer`; the
+`anycastd_gobgp_fsm_*` histograms carry **no labels**. They are polled every
+**1 second** by `announcer.NewMetricsRepository(...).Run`.
 
 | Metric name                                         | Labels            |
 | --------------------------------------------------- | ----------------- |
-| `anycastd_gobgp_peer_count`                         | `router_id`       |
+| `anycastd_gobgp_fsm_accept_timing_seconds`          | `(none)`          |
+| `anycastd_gobgp_fsm_accept_wait_seconds`            | `(none)`          |
+| `anycastd_gobgp_fsm_event_timing_seconds`           | `(none)`          |
+| `anycastd_gobgp_fsm_event_wait_seconds`             | `(none)`          |
+| `anycastd_gobgp_fsm_message_timing_seconds`         | `(none)`          |
+| `anycastd_gobgp_fsm_message_wait_seconds`           | `(none)`          |
+| `anycastd_gobgp_fsm_mgmt_op_timing_seconds`         | `(none)`          |
+| `anycastd_gobgp_fsm_mgmt_op_wait_seconds`           | `(none)`          |
 | `anycastd_gobgp_peer_admin_state`                   | `router_id, peer` |
 | `anycastd_gobgp_peer_asn`                           | `router_id, peer` |
 | `anycastd_gobgp_peer_bfd_failure_transitions`       | `router_id, peer` |
@@ -544,34 +553,35 @@ are polled every **1 second** by `announcer.NewMetricsRepository(...).Run`.
 | `anycastd_gobgp_peer_bfd_remote_diagnostic_code`    | `router_id, peer` |
 | `anycastd_gobgp_peer_bfd_remote_state`              | `router_id, peer` |
 | `anycastd_gobgp_peer_bfd_state`                     | `router_id, peer` |
-| `anycastd_gobgp_peer_session_state`                 | `router_id, peer` |
-| `anycastd_gobgp_peer_out_queue_count`               | `router_id, peer` |
+| `anycastd_gobgp_peer_count`                         | `router_id`       |
 | `anycastd_gobgp_peer_flops_count`                   | `router_id, peer` |
-| `anycastd_gobgp_peer_send_community_flag`           | `router_id, peer` |
-| `anycastd_gobgp_peer_remove_private_flag`           | `router_id, peer` |
-| `anycastd_gobgp_peer_password_set_flag`             | `router_id, peer` |
 | `anycastd_gobgp_peer_local_asn`                     | `router_id, peer` |
-| `anycastd_gobgp_peer_type`                          | `router_id, peer` |
-| `anycastd_gobgp_peer_routes_received`               | `router_id, peer` |
+| `anycastd_gobgp_peer_out_queue_count`               | `router_id, peer` |
+| `anycastd_gobgp_peer_password_set_flag`             | `router_id, peer` |
+| `anycastd_gobgp_peer_remove_private_flag`           | `router_id, peer` |
 | `anycastd_gobgp_peer_routes_accepted`               | `router_id, peer` |
 | `anycastd_gobgp_peer_routes_advertised`             | `router_id, peer` |
+| `anycastd_gobgp_peer_routes_received`               | `router_id, peer` |
+| `anycastd_gobgp_peer_send_community_flag`           | `router_id, peer` |
+| `anycastd_gobgp_peer_session_state`                 | `router_id, peer` |
+| `anycastd_gobgp_peer_type`                          | `router_id, peer` |
 | `anycastd_gobgp_peer_uptime_seconds`                | `router_id, peer` |
-| `anycastd_gobgp_received_messages_total`            | `router_id, peer` |
-| `anycastd_gobgp_received_messages_notification`     | `router_id, peer` |
-| `anycastd_gobgp_received_messages_update`           | `router_id, peer` |
-| `anycastd_gobgp_received_messages_open`             | `router_id, peer` |
 | `anycastd_gobgp_received_messages_keepalive`        | `router_id, peer` |
+| `anycastd_gobgp_received_messages_notification`     | `router_id, peer` |
+| `anycastd_gobgp_received_messages_open`             | `router_id, peer` |
 | `anycastd_gobgp_received_messages_refresh`          | `router_id, peer` |
-| `anycastd_gobgp_received_messages_withdraw_update`  | `router_id, peer` |
+| `anycastd_gobgp_received_messages_total`            | `router_id, peer` |
+| `anycastd_gobgp_received_messages_update`           | `router_id, peer` |
 | `anycastd_gobgp_received_messages_withdraw_prefix`  | `router_id, peer` |
-| `anycastd_gobgp_sent_messages_total`                | `router_id, peer` |
-| `anycastd_gobgp_sent_messages_notification`         | `router_id, peer` |
-| `anycastd_gobgp_sent_messages_update`               | `router_id, peer` |
-| `anycastd_gobgp_sent_messages_open`                 | `router_id, peer` |
+| `anycastd_gobgp_received_messages_withdraw_update`  | `router_id, peer` |
 | `anycastd_gobgp_sent_messages_keepalive`            | `router_id, peer` |
+| `anycastd_gobgp_sent_messages_notification`         | `router_id, peer` |
+| `anycastd_gobgp_sent_messages_open`                 | `router_id, peer` |
 | `anycastd_gobgp_sent_messages_refresh`              | `router_id, peer` |
-| `anycastd_gobgp_sent_messages_withdraw_update`      | `router_id, peer` |
+| `anycastd_gobgp_sent_messages_total`                | `router_id, peer` |
+| `anycastd_gobgp_sent_messages_update`               | `router_id, peer` |
 | `anycastd_gobgp_sent_messages_withdraw_prefix`      | `router_id, peer` |
+| `anycastd_gobgp_sent_messages_withdraw_update`      | `router_id, peer` |
 
 `peer_password_set_flag` is set from `PeerState.PasswordSet` (mapped from the
 GoBGP peer's `AuthPassword`); because anycastd does not configure peer
@@ -595,12 +605,18 @@ richer fields per peer:
 * `peer_bfd_remote_diagnostic_code` — RFC 5880 diagnostic code;
 * `peer_bfd_last_failure_time_seconds` — unix time of the last BFD failure.
 
-In addition to the remapped `anycastd_gobgp_*` series, GoBGP's native
-FSM-timing histograms are registered in `cmd/anycastd/main.go` under the
-`fsm_loop_*` namespace (`fsm_loop_{mgmt_op,accept,event,message}_{timing_sec,wait_sec}`)
-via `NewFSMTimingsCollector()`. The GoBGP `bgp_*` collector is intentionally
-**not** registered — its data is remapped into the `anycastd_gobgp_*` series
-above.
+In addition to the remapped `anycastd_gobgp_*` gauges, the GoBGP FSM-loop
+timings are exposed as 8 histograms under the `anycastd` namespace / `gobgp`
+subsystem: `anycastd_gobgp_fsm_{mgmt_op,accept,event,message}_{timing_seconds,wait_seconds}`.
+The `_timing_seconds` histograms measure how long each FSM operation takes; the
+`_wait_seconds` histograms measure the channel-wait delay between an FSM event
+and its handling. These are collected by a custom Prometheus collector
+(`announcer/gobgpv4/fsm_metrics.go`) wired into the **GoBGP v4** server via
+`server.TimingHookOption`, so they reflect real FSM timings rather than staying
+at zero, and are provided **only by the `gobgpv4` engine**. GoBGP's native
+`bgp_*` and `fsm_loop_*` collectors are intentionally **not** registered — peer
+data is remapped into the `anycastd_gobgp_*` series above and FSM timings are
+exposed under the `anycastd` namespace.
 
 ### 7.3 Checker metrics
 

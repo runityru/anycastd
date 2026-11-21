@@ -331,53 +331,65 @@ In addition some checkers could provide their own metrics the list of them is be
 The core of anycastd for BGP communication is GoBGP which allows so gather
 some details about peers, sessions and announces.
 
-| Metric name                                       | Labels          | Type  | Description                                                                                         |
-| ------------------------------------------------- | --------------- | ----- | --------------------------------------------------------------------------------------------------- |
-| anycastd_gobgp_peer_admin_state                   | router_id, peer | gauge | Peer state 0=up, 1=down, 2=pfx_ct                                                                   |
-| anycastd_gobgp_peer_asn                           | router_id, peer | gauge | AS number of the peer                                                                               |
-| anycastd_gobgp_peer_bfd_failure_transitions       | router_id, peer | gauge | Number of BFD session failure transitions (monotonic; present only when BFD is enabled, GoBGP v4)   |
-| anycastd_gobgp_peer_bfd_last_failure_time_seconds | router_id, peer | gauge | Unix time in seconds of the last BFD failure (present only when BFD is enabled, GoBGP v4)           |
-| anycastd_gobgp_peer_bfd_packets_received          | router_id, peer | gauge | Number of BFD packets received (monotonic; present only when BFD is enabled, GoBGP v4)              |
-| anycastd_gobgp_peer_bfd_packets_transmitted       | router_id, peer | gauge | Number of BFD packets transmitted (monotonic; present only when BFD is enabled, GoBGP v4)           |
-| anycastd_gobgp_peer_bfd_remote_diagnostic_code    | router_id, peer | gauge | Remote BFD diagnostic code (RFC 5880; present only when BFD is enabled, GoBGP v4)                   |
-| anycastd_gobgp_peer_bfd_remote_state              | router_id, peer | gauge | Remote BFD session state of the peer 0=down, 1=up (present only when BFD is enabled, GoBGP v4)      |
-| anycastd_gobgp_peer_bfd_state                     | router_id, peer | gauge | BFD session state of the peer 0=down, 1=up (via GoBGP ListBfdPeer)                                  |
-| anycastd_gobgp_peer_count                         | router_id       | gauge | Total amount of peers configured for the GoBGP instance                                             |
-| anycastd_gobgp_peer_flops_count                   | router_id, peer | gauge | Peer flops count                                                                                    |
-| anycastd_gobgp_peer_local_asn                     | router_id, peer | gauge | AS number presented to the peer by this router                                                      |
-| anycastd_gobgp_peer_out_queue_count               | router_id, peer | gauge | Peer outgoing messages queue                                                                        |
-| anycastd_gobgp_peer_password_set_flag             | router_id, peer | gauge | Whether the peer have peer password set flag set                                                    |
-| anycastd_gobgp_peer_remove_private_flag           | router_id, peer | gauge | Whether the peer have remove private flag set                                                       |
-| anycastd_gobgp_peer_routes_accepted               | router_id, peer | gauge | Number of routes accepted from the peer, summed across address families                             |
-| anycastd_gobgp_peer_routes_advertised             | router_id, peer | gauge | Number of routes advertised to the peer, summed across address families                             |
-| anycastd_gobgp_peer_routes_received               | router_id, peer | gauge | Number of routes received from the peer, summed across address families                             |
-| anycastd_gobgp_peer_send_community_flag           | router_id, peer | gauge | Whether the peer have send community flag set                                                       |
-| anycastd_gobgp_peer_session_state                 | router_id, peer | gauge | Peer session state 0=unknown, 1=idle, 2=connect, 3=active, 4=opensent, 5=openconfirm, 6=established |
-| anycastd_gobgp_peer_type                          | router_id, peer | gauge | Peer type 0=internal, 1=external                                                                    |
-| anycastd_gobgp_peer_uptime_seconds                | router_id, peer | gauge | Unix time in seconds at which the BGP session with the peer last came up                            |
-| anycastd_gobgp_received_messages_keepalive        | router_id, peer | gauge | Number of Keepalive messages received from the peer                                                 |
-| anycastd_gobgp_received_messages_notification     | router_id, peer | gauge | Number of Notification messages received from the peer                                              |
-| anycastd_gobgp_received_messages_open             | router_id, peer | gauge | Number of Open messages received from the peer                                                      |
-| anycastd_gobgp_received_messages_refresh          | router_id, peer | gauge | Number of Refresh messages received from the peer                                                   |
-| anycastd_gobgp_received_messages_total            | router_id, peer | gauge | Total number of messages received from the peer                                                     |
-| anycastd_gobgp_received_messages_update           | router_id, peer | gauge | Number of Update messages received from the peer                                                    |
-| anycastd_gobgp_received_messages_withdraw_update  | router_id, peer | gauge | Number of Withdraw Update messages received from the peer                                           |
-| anycastd_gobgp_received_messages_withdraw_prefix  | router_id, peer | gauge | Number of Withdraw Prefix messages received from the peer                                           |
-| anycastd_gobgp_sent_messages_keepalive            | router_id, peer | gauge | Number of Keepalive messages sent to the peer                                                       |
-| anycastd_gobgp_sent_messages_notification         | router_id, peer | gauge | Number of Notification messages sent to the peer                                                    |
-| anycastd_gobgp_sent_messages_open                 | router_id, peer | gauge | Number of Open messages sent to the peer                                                            |
-| anycastd_gobgp_sent_messages_refresh              | router_id, peer | gauge | Number of Refresh messages sent to the peer                                                         |
-| anycastd_gobgp_sent_messages_total                | router_id, peer | gauge | Total number of messages sent to the peer                                                           |
-| anycastd_gobgp_sent_messages_update               | router_id, peer | gauge | Number of Update messages sent to the peer                                                          |
-| anycastd_gobgp_sent_messages_withdraw_prefix      | router_id, peer | gauge | Number of Withdraw Prefix messages sent to the peer                                                 |
-| anycastd_gobgp_sent_messages_withdraw_update      | router_id, peer | gauge | Number of Withdraw Update messages sent to the peer                                                 |
+| Metric name                                       | Labels          | Type      | Description                                                                                         |
+| ------------------------------------------------- | --------------- | --------- | --------------------------------------------------------------------------------------------------- |
+| anycastd_gobgp_fsm_accept_timing_seconds          | -               | histogram | Histogram of GoBGP FSM accept operation timings, in seconds                                         |
+| anycastd_gobgp_fsm_accept_wait_seconds            | -               | histogram | Histogram of GoBGP FSM accept channel wait delays, in seconds                                       |
+| anycastd_gobgp_fsm_event_timing_seconds           | -               | histogram | Histogram of GoBGP FSM event operation timings, in seconds                                          |
+| anycastd_gobgp_fsm_event_wait_seconds             | -               | histogram | Histogram of GoBGP FSM event channel wait delays, in seconds                                        |
+| anycastd_gobgp_fsm_message_timing_seconds         | -               | histogram | Histogram of GoBGP FSM message operation timings, in seconds                                        |
+| anycastd_gobgp_fsm_message_wait_seconds           | -               | histogram | Histogram of GoBGP FSM message channel wait delays, in seconds                                      |
+| anycastd_gobgp_fsm_mgmt_op_timing_seconds         | -               | histogram | Histogram of GoBGP FSM mgmt_op operation timings, in seconds                                        |
+| anycastd_gobgp_fsm_mgmt_op_wait_seconds           | -               | histogram | Histogram of GoBGP FSM mgmt_op channel wait delays, in seconds                                      |
+| anycastd_gobgp_peer_admin_state                   | router_id, peer | gauge     | Peer state 0=up, 1=down, 2=pfx_ct                                                                   |
+| anycastd_gobgp_peer_asn                           | router_id, peer | gauge     | AS number of the peer                                                                               |
+| anycastd_gobgp_peer_bfd_failure_transitions       | router_id, peer | gauge     | Number of BFD session failure transitions (monotonic; present only when BFD is enabled, GoBGP v4)   |
+| anycastd_gobgp_peer_bfd_last_failure_time_seconds | router_id, peer | gauge     | Unix time in seconds of the last BFD failure (present only when BFD is enabled, GoBGP v4)           |
+| anycastd_gobgp_peer_bfd_packets_received          | router_id, peer | gauge     | Number of BFD packets received (monotonic; present only when BFD is enabled, GoBGP v4)              |
+| anycastd_gobgp_peer_bfd_packets_transmitted       | router_id, peer | gauge     | Number of BFD packets transmitted (monotonic; present only when BFD is enabled, GoBGP v4)           |
+| anycastd_gobgp_peer_bfd_remote_diagnostic_code    | router_id, peer | gauge     | Remote BFD diagnostic code (RFC 5880; present only when BFD is enabled, GoBGP v4)                   |
+| anycastd_gobgp_peer_bfd_remote_state              | router_id, peer | gauge     | Remote BFD session state of the peer 0=down, 1=up (present only when BFD is enabled, GoBGP v4)      |
+| anycastd_gobgp_peer_bfd_state                     | router_id, peer | gauge     | BFD session state of the peer 0=down, 1=up (via GoBGP ListBfdPeer)                                  |
+| anycastd_gobgp_peer_count                         | router_id       | gauge     | Total amount of peers configured for the GoBGP instance                                             |
+| anycastd_gobgp_peer_flops_count                   | router_id, peer | gauge     | Peer flops count                                                                                    |
+| anycastd_gobgp_peer_local_asn                     | router_id, peer | gauge     | AS number presented to the peer by this router                                                      |
+| anycastd_gobgp_peer_out_queue_count               | router_id, peer | gauge     | Peer outgoing messages queue                                                                        |
+| anycastd_gobgp_peer_password_set_flag             | router_id, peer | gauge     | Whether the peer have peer password set flag set                                                    |
+| anycastd_gobgp_peer_remove_private_flag           | router_id, peer | gauge     | Whether the peer have remove private flag set                                                       |
+| anycastd_gobgp_peer_routes_accepted               | router_id, peer | gauge     | Number of routes accepted from the peer, summed across address families                             |
+| anycastd_gobgp_peer_routes_advertised             | router_id, peer | gauge     | Number of routes advertised to the peer, summed across address families                             |
+| anycastd_gobgp_peer_routes_received               | router_id, peer | gauge     | Number of routes received from the peer, summed across address families                             |
+| anycastd_gobgp_peer_send_community_flag           | router_id, peer | gauge     | Whether the peer have send community flag set                                                       |
+| anycastd_gobgp_peer_session_state                 | router_id, peer | gauge     | Peer session state 0=unknown, 1=idle, 2=connect, 3=active, 4=opensent, 5=openconfirm, 6=established |
+| anycastd_gobgp_peer_type                          | router_id, peer | gauge     | Peer type 0=internal, 1=external                                                                    |
+| anycastd_gobgp_peer_uptime_seconds                | router_id, peer | gauge     | Unix time in seconds at which the BGP session with the peer last came up                            |
+| anycastd_gobgp_received_messages_keepalive        | router_id, peer | gauge     | Number of Keepalive messages received from the peer                                                 |
+| anycastd_gobgp_received_messages_notification     | router_id, peer | gauge     | Number of Notification messages received from the peer                                              |
+| anycastd_gobgp_received_messages_open             | router_id, peer | gauge     | Number of Open messages received from the peer                                                      |
+| anycastd_gobgp_received_messages_refresh          | router_id, peer | gauge     | Number of Refresh messages received from the peer                                                   |
+| anycastd_gobgp_received_messages_total            | router_id, peer | gauge     | Total number of messages received from the peer                                                     |
+| anycastd_gobgp_received_messages_update           | router_id, peer | gauge     | Number of Update messages received from the peer                                                    |
+| anycastd_gobgp_received_messages_withdraw_prefix  | router_id, peer | gauge     | Number of Withdraw Prefix messages received from the peer                                           |
+| anycastd_gobgp_received_messages_withdraw_update  | router_id, peer | gauge     | Number of Withdraw Update messages received from the peer                                           |
+| anycastd_gobgp_sent_messages_keepalive            | router_id, peer | gauge     | Number of Keepalive messages sent to the peer                                                       |
+| anycastd_gobgp_sent_messages_notification         | router_id, peer | gauge     | Number of Notification messages sent to the peer                                                    |
+| anycastd_gobgp_sent_messages_open                 | router_id, peer | gauge     | Number of Open messages sent to the peer                                                            |
+| anycastd_gobgp_sent_messages_refresh              | router_id, peer | gauge     | Number of Refresh messages sent to the peer                                                         |
+| anycastd_gobgp_sent_messages_total                | router_id, peer | gauge     | Total number of messages sent to the peer                                                           |
+| anycastd_gobgp_sent_messages_update               | router_id, peer | gauge     | Number of Update messages sent to the peer                                                          |
+| anycastd_gobgp_sent_messages_withdraw_prefix      | router_id, peer | gauge     | Number of Withdraw Prefix messages sent to the peer                                                 |
+| anycastd_gobgp_sent_messages_withdraw_update      | router_id, peer | gauge     | Number of Withdraw Update messages sent to the peer                                                 |
 
 The `peer_bfd_*` series (beyond `peer_bfd_state`) are present **only when BFD is
 enabled** for a peer (GoBGP v4). The `peer_routes_*` counters are summed across
 all address families for the peer.
 
-GoBGP's native FSM-timing histograms are also registered in
-`cmd/anycastd/main.go` under the `fsm_loop_*` namespace
-(`fsm_loop_{mgmt_op,accept,event,message}_{timing_sec,wait_sec}`) via
-`NewFSMTimingsCollector()`. The GoBGP `bgp_*` collector is intentionally **not**
-registered — its data is remapped into the `anycastd_gobgp_*` series above.
+The `anycastd_gobgp_fsm_*` histograms above are provided **only by the GoBGP v4
+engine**. They are collected by a custom Prometheus collector
+(`announcer/gobgpv4/fsm_metrics.go`) that is wired into the GoBGP v4 server via
+`server.TimingHookOption`, so the `_timing_seconds` histograms reflect real FSM
+operation timings and the `_wait_seconds` histograms reflect real channel-wait
+delays (rather than staying at zero). GoBGP's native `bgp_*` and `fsm_loop_*`
+collectors are intentionally **not** registered — peer data is remapped into the
+`anycastd_gobgp_*` series above, and FSM timings are exposed under the `anycastd`
+namespace.
